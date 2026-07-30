@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AudioPad.UI.ViewModels"
+             x:Class="AudioPad.UI.Controls.PadButton"
+             x:DataType="vm:PadViewModel">
+    <UserControl.Styles>
+        <Style Selector="Button.pad.lit">
+            <Setter Property="Background" Value="#FFC107" />
+            <Setter Property="Foreground" Value="Black" />
+        </Style>
+    </UserControl.Styles>
+
+    <Button Classes="pad"
+            Classes.lit="{Binding IsLit}"
+            Command="{Binding ToggleCommand}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            MinWidth="96"
+            MinHeight="72">
+        <TextBlock Text="{Binding Label}"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center" />
+    </Button>
+</UserControl>

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AudioPad.Android/AudioPad.Android.csproj" />
+    <Project Path="src/AudioPad.Audio/AudioPad.Audio.csproj" />
+    <Project Path="src/AudioPad.Core/AudioPad.Core.csproj" />
+    <Project Path="src/AudioPad.Desktop/AudioPad.Desktop.csproj" />
+    <Project Path="src/AudioPad.UI/AudioPad.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AudioPad.Core.Tests/AudioPad.Core.Tests.csproj" />
+  </Folder>
+</Solution>
