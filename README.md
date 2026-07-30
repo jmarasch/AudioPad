@@ -8,7 +8,7 @@ A cross-platform soundboard: a user-configurable grid of buttons, each mapped to
 - A pad shows lit while its clip is playing; double-tap a pad to configure its file, mode,
   volume, icon, and label.
 - Grid size (rows/columns) is user-configurable.
-- Targets Linux, Windows, and Android from one shared codebase.
+- Targets Linux, Windows, and Android (15+) from one shared codebase.
 
 This repository is currently a **project scaffold**: the domain model, project structure, and a
 placeholder UI are in place and building; the real audio engine and per-pad config dialog are the
