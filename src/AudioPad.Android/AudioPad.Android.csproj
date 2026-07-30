@@ -10,6 +10,11 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <!-- Debug builds default to Fast Deployment, which pushes assemblies to the device
+         separately from the APK via `dotnet build -t:Run`. That breaks a plain `adb install`
+         of the APK (the app aborts at launch, unable to find its assemblies), so embed
+         assemblies directly into the APK for a self-contained, sideloadable build. -->
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
   </PropertyGroup>
 
   <ItemGroup>
