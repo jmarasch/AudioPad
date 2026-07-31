@@ -1,33 +1,76 @@
 using AudioPad.Core.Models;
+using AudioPad.Core.Playback;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AudioPad.UI.ViewModels;
 
-/// <summary>Wraps a <see cref="PadConfig"/> with the UI-facing "lit while playing" state for one grid button.</summary>
+/// <summary>Wraps a <see cref="PadConfig"/> with the UI-facing playing/"lit" state for one grid button.</summary>
 public sealed partial class PadViewModel : ViewModelBase
 {
+    private readonly IAudioEngine _audioEngine;
+
     public PadConfig Config { get; }
 
     [ObservableProperty]
     private bool _isLit;
 
-    public PadViewModel(PadConfig config)
+    [ObservableProperty]
+    private Bitmap? _iconBitmap;
+
+    /// <summary>Raised when the pad is double-tapped, asking the owner to open its config dialog.</summary>
+    public event Action<PadViewModel>? ConfigRequested;
+
+    public PadViewModel(PadConfig config, IAudioEngine audioEngine)
     {
         Config = config;
+        _audioEngine = audioEngine;
+        _audioEngine.PlaybackStateChanged += OnPlaybackStateChanged;
+        IconBitmap = LoadIconBitmap(config.IconPath);
     }
 
     public string Label => Config.Label;
 
-    /// <summary>
-    /// Placeholder for the real pad-press behavior: toggles the lit indicator locally so the grid
-    /// layout and styling can be seen working. Wiring this to
-    /// <see cref="AudioPad.Core.Playback.IAudioEngine"/> for real Latch/Loop playback — and adding
-    /// double-tap to open the per-pad config dialog — is the next milestone (see docs/ARCHITECTURE.md).
-    /// </summary>
-    [RelayCommand]
-    private void Toggle()
+    /// <summary>Re-reads display state from <see cref="Config"/> after it's been edited and saved.</summary>
+    public void RefreshFromConfig()
     {
-        IsLit = !IsLit;
+        OnPropertyChanged(nameof(Label));
+        IconBitmap = LoadIconBitmap(Config.IconPath);
+    }
+
+    [RelayCommand]
+    private void Toggle() => _audioEngine.Play(Config);
+
+    [RelayCommand]
+    private void OpenConfig() => ConfigRequested?.Invoke(this);
+
+    private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
+    {
+        if (e.PadId != Config.Id)
+        {
+            return;
+        }
+
+        // EndReached-driven stops arrive from a background thread; marshal onto the UI thread.
+        Dispatcher.UIThread.Post(() => IsLit = e.IsPlaying);
+    }
+
+    private static Bitmap? LoadIconBitmap(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new Bitmap(path);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }

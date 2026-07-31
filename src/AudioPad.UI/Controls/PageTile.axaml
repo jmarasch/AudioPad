@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AudioPad.UI.ViewModels"
+             x:Class="AudioPad.UI.Controls.PageTile"
+             x:DataType="vm:PageViewModel">
+    <Border x:Name="RootBorder"
+            Background="{Binding ThemeBrush}"
+            Width="220"
+            Height="140"
+            CornerRadius="8"
+            DoubleTapped="OnDoubleTapped">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="4">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="18"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center" />
+            <TextBlock HorizontalAlignment="Center" Opacity="0.8">
+                <Run Text="{Binding Rows}" /><Run Text="&#215;" /><Run Text="{Binding Columns}" />
+            </TextBlock>
+        </StackPanel>
+    </Border>
+</UserControl>

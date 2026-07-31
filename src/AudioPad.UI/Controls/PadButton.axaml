@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AudioPad.UI.ViewModels"
+             xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="AudioPad.UI.Controls.PadButton"
              x:DataType="vm:PadViewModel">
     <UserControl.Styles>
@@ -10,15 +11,24 @@
         </Style>
     </UserControl.Styles>
 
-    <Button Classes="pad"
+    <Button x:Name="RootButton"
+            Classes="pad"
             Classes.lit="{Binding IsLit}"
             Command="{Binding ToggleCommand}"
+            DoubleTapped="OnDoubleTapped"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             MinWidth="96"
             MinHeight="72">
-        <TextBlock Text="{Binding Label}"
-                   TextWrapping="Wrap"
-                   TextAlignment="Center" />
+        <StackPanel Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Image Source="{Binding IconBitmap}"
+                   IsVisible="{Binding IconBitmap, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                   MaxHeight="32"
+                   MaxWidth="32"
+                   HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding Label}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center" />
+        </StackPanel>
     </Button>
 </UserControl>

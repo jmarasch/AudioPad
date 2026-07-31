@@ -1,0 +1,46 @@
+# Normalize all text to LF in the repository and in working trees on every platform.
+# This matches .editorconfig (end_of_line = lf) and keeps the Linux and Windows
+# checkouts byte-identical, so switching machines doesn't churn the diff.
+* text=auto eol=lf
+
+# Shell scripts must keep LF even on Windows — CRLF breaks the shebang.
+*.sh text eol=lf
+
+# Windows-only scripts are the one exception; these genuinely want CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Source and project files (explicit for clarity; covered by text=auto above).
+*.cs        text diff=csharp
+*.axaml     text
+*.xaml      text
+*.csproj    text
+*.props     text
+*.targets   text
+*.slnx      text
+*.json      text
+*.md        text
+*.xml       text
+
+# Binary assets — never munge these.
+*.mp3   binary
+*.wav   binary
+*.ogg   binary
+*.flac  binary
+*.m4a   binary
+*.aac   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.svg   text
+*.apk      binary
+*.aab      binary
+*.keystore binary
+*.jks      binary
+*.so       binary
+*.dll      binary
+*.zip      binary

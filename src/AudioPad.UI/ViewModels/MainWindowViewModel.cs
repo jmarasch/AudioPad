@@ -1,26 +1,208 @@
 using System.Collections.ObjectModel;
 using AudioPad.Core.Models;
+using AudioPad.Core.Persistence;
+using AudioPad.Core.Playback;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AudioPad.UI.ViewModels;
 
-/// <summary>Owns the current grid profile and exposes it as pad view models for the UI to bind to.</summary>
-public sealed class MainWindowViewModel : ViewModelBase
+/// <summary>Owns the current setup (all pages) and exposes it for the UI to bind to.</summary>
+public sealed partial class MainWindowViewModel : ViewModelBase
 {
-    public int Rows { get; }
+    private readonly Setup _setup;
+    private readonly IAudioEngine _audioEngine;
+    private readonly SetupRepository _setupRepository;
+    private readonly string _setupPath;
 
-    public int Columns { get; }
+    /// <summary>The real, ordered pages — what page reordering and Manage Pages act on.</summary>
+    public ObservableCollection<PageViewModel> Pages { get; }
 
-    public ObservableCollection<PadViewModel> Pads { get; }
+    /// <summary>
+    /// <see cref="Pages"/> padded with a clone of the last page at index 0 and a clone of the
+    /// first page at the end, so the Carousel can be swiped/advanced one step past either real
+    /// end and then be silently snapped back to the corresponding real page — the illusion of a
+    /// seamless, endless carousel. See <see cref="IsSentinelIndex"/>/<see cref="ResolveSentinelIndex"/>.
+    /// </summary>
+    public ObservableCollection<PageViewModel> CarouselItems { get; } = new();
+
+    /// <summary>Two-way bound to the Carousel's SelectedIndex. Starts at 1: the first real page.</summary>
+    [ObservableProperty]
+    private int _selectedCarouselIndex = 1;
+
+    /// <summary>The pad currently being edited via the double-tap overlay, or null when it's closed.</summary>
+    [ObservableProperty]
+    private PadConfigViewModel? _activeConfig;
+
+    /// <summary>Whether the zoomed-out page overview is open.</summary>
+    [ObservableProperty]
+    private bool _isPageOverviewOpen;
+
+    /// <summary>The tile selected in the page overview, or null when none is. Transient — not persisted.</summary>
+    [ObservableProperty]
+    private PageViewModel? _selectedOverviewPage;
+
+    /// <summary>
+    /// Whether Delete is "armed" (first press) and a second press on the same selection will
+    /// actually delete — a lightweight confirm-by-repeating instead of a modal dialog.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDeleteArmed;
 
     public MainWindowViewModel()
-        : this(GridProfile.CreateDefault())
+        : this(Setup.CreateDefault(), new NullAudioEngine(), new SetupRepository(), SetupRepository.GetDefaultSetupPath())
     {
     }
 
-    public MainWindowViewModel(GridProfile profile)
+    public MainWindowViewModel(Setup setup, IAudioEngine audioEngine, SetupRepository setupRepository, string setupPath)
     {
-        Rows = profile.Rows;
-        Columns = profile.Columns;
-        Pads = new ObservableCollection<PadViewModel>(profile.Pads.Select(pad => new PadViewModel(pad)));
+        _setup = setup;
+        _audioEngine = audioEngine;
+        _setupRepository = setupRepository;
+        _setupPath = setupPath;
+
+        Pages = new ObservableCollection<PageViewModel>();
+        foreach (var page in setup.Pages)
+        {
+            Pages.Add(CreatePageViewModel(page));
+        }
+
+        RebuildCarouselItems();
     }
+
+    /// <summary>True if a Carousel index is one of the sentinel clones at either end.</summary>
+    public bool IsSentinelIndex(int carouselIndex) => carouselIndex == 0 || carouselIndex == CarouselItems.Count - 1;
+
+    /// <summary>Maps a sentinel index to the real index it stands in for, within <see cref="CarouselItems"/>.</summary>
+    public int ResolveSentinelIndex(int carouselIndex) => carouselIndex == 0 ? CarouselItems.Count - 2 : 1;
+
+    [RelayCommand]
+    private void NextPage() => SelectedCarouselIndex = Math.Min(SelectedCarouselIndex + 1, CarouselItems.Count - 1);
+
+    [RelayCommand]
+    private void PreviousPage() => SelectedCarouselIndex = Math.Max(SelectedCarouselIndex - 1, 0);
+
+    [RelayCommand]
+    private void AddPage()
+    {
+        var page = Page.CreateDefault(title: $"Page {Pages.Count + 1}");
+        _setup.Pages.Add(page);
+        Pages.Add(CreatePageViewModel(page));
+        RebuildCarouselItems();
+        PersistSetup();
+    }
+
+    [RelayCommand]
+    private void OpenPageOverview() => IsPageOverviewOpen = true;
+
+    [RelayCommand]
+    private void CloseOverview()
+    {
+        IsPageOverviewOpen = false;
+        SelectedOverviewPage = null;
+    }
+
+    /// <summary>Closes the overview and jumps the carousel straight to the given page — a quick
+    /// way to skip several pages at once instead of swiping/arrow-clicking through each one.</summary>
+    [RelayCommand]
+    private void NavigateToPage(PageViewModel page)
+    {
+        var index = Pages.IndexOf(page);
+        if (index < 0)
+        {
+            return;
+        }
+
+        CloseOverview();
+        SelectedCarouselIndex = index + 1;
+    }
+
+    [RelayCommand]
+    private void DeleteSelectedPage()
+    {
+        if (SelectedOverviewPage is not { } page || Pages.Count <= 1)
+        {
+            return;
+        }
+
+        if (!IsDeleteArmed)
+        {
+            IsDeleteArmed = true;
+            return;
+        }
+
+        var index = Pages.IndexOf(page);
+        Pages.RemoveAt(index);
+        _setup.Pages.RemoveAt(index);
+        SelectedOverviewPage = null;
+        RebuildCarouselItems();
+        PersistSetup();
+    }
+
+    partial void OnSelectedOverviewPageChanged(PageViewModel? value) => IsDeleteArmed = false;
+
+    /// <summary>Swaps two pages' positions — the reorder mechanic driven by the page overview's
+    /// hold-drag gesture, matching <see cref="PageViewModel.SwapPads"/>'s semantics for pads.</summary>
+    public void SwapPages(PageViewModel a, PageViewModel b)
+    {
+        var indexA = Pages.IndexOf(a);
+        var indexB = Pages.IndexOf(b);
+        if (indexA < 0 || indexB < 0 || indexA == indexB)
+        {
+            return;
+        }
+
+        (Pages[indexA], Pages[indexB]) = (Pages[indexB], Pages[indexA]);
+        (_setup.Pages[indexA], _setup.Pages[indexB]) = (_setup.Pages[indexB], _setup.Pages[indexA]);
+
+        RebuildCarouselItems();
+        PersistSetup();
+    }
+
+    /// <summary>
+    /// Rebuilds the padded <see cref="CarouselItems"/> list from <see cref="Pages"/>. Clearing and
+    /// re-adding fires a Reset notification that a bound Carousel reacts to by resetting its own
+    /// SelectedIndex — which flows straight back into <see cref="SelectedCarouselIndex"/> through
+    /// the two-way binding — so the previously-selected page is captured by reference beforehand
+    /// and explicitly restored to its new position afterward, overriding whatever transient value
+    /// the reset left behind.
+    /// </summary>
+    private void RebuildCarouselItems()
+    {
+        var selectedPage = SelectedCarouselIndex >= 0 && SelectedCarouselIndex < CarouselItems.Count
+            ? CarouselItems[SelectedCarouselIndex]
+            : null;
+
+        CarouselItems.Clear();
+        CarouselItems.Add(Pages[^1]);
+        foreach (var page in Pages)
+        {
+            CarouselItems.Add(page);
+        }
+
+        CarouselItems.Add(Pages[0]);
+
+        var realIndex = selectedPage is null ? -1 : Pages.IndexOf(selectedPage);
+        SelectedCarouselIndex = realIndex >= 0 ? realIndex + 1 : 1;
+    }
+
+    private PageViewModel CreatePageViewModel(Page page) => new(page, _audioEngine, OnPadConfigRequested, PersistSetup);
+
+    private void OnPadConfigRequested(PadViewModel pad)
+    {
+        ActiveConfig = new PadConfigViewModel(pad.Config, saved => OnConfigClosed(pad, saved));
+    }
+
+    private void OnConfigClosed(PadViewModel pad, bool saved)
+    {
+        if (saved)
+        {
+            pad.RefreshFromConfig();
+            PersistSetup();
+        }
+
+        ActiveConfig = null;
+    }
+
+    private void PersistSetup() => _setupRepository.SaveSetup(_setupPath, _setup);
 }

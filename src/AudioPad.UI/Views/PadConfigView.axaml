@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AudioPad.UI.ViewModels"
+             x:Class="AudioPad.UI.Views.PadConfigView"
+             x:DataType="vm:PadConfigViewModel">
+    <Border Background="#CC000000">
+        <Border Background="#FF2B2B2B"
+                CornerRadius="8"
+                Padding="24"
+                Width="360"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Configure Pad" FontSize="18" FontWeight="Bold" />
+
+                <TextBlock Text="Label" />
+                <TextBox Text="{Binding Label}" />
+
+                <TextBlock Text="Audio file" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding AudioFilePath, TargetNullValue='No file selected'}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="Browse…" Click="OnBrowseAudioClick" />
+                </Grid>
+
+                <TextBlock Text="Icon (optional)" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding IconPath, TargetNullValue='No icon selected'}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="Browse…" Click="OnBrowseIconClick" />
+                </Grid>
+
+                <TextBlock Text="Playback mode" />
+                <ComboBox ItemsSource="{Binding AvailableModes}" SelectedItem="{Binding Mode}" HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="{Binding Volume, StringFormat='Volume: {0:P0}'}" />
+                <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Border>
+</UserControl>

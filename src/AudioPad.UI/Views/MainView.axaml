@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:AudioPad.UI.ViewModels"
              xmlns:controls="using:AudioPad.UI.Controls"
+             xmlns:views="using:AudioPad.UI.Views"
+             xmlns:conv="using:Avalonia.Data.Converters"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="AudioPad.UI.Views.MainView"
              x:DataType="vm:MainWindowViewModel">
@@ -13,18 +15,55 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <!-- Rows/Columns are user-configurable per docs/ARCHITECTURE.md; UniformGrid picks them up
-         from the bound MainWindowViewModel so resizing the grid is just changing those numbers. -->
-    <ItemsControl ItemsSource="{Binding Pads}">
-        <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-                <UniformGrid Rows="{Binding Rows}" Columns="{Binding Columns}" />
-            </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:PadViewModel">
-                <controls:PadButton Margin="4" />
-            </DataTemplate>
-        </ItemsControl.ItemTemplate>
-    </ItemsControl>
+    <Panel>
+        <Button Content="&lt;" HorizontalAlignment="Left" VerticalAlignment="Center" Command="{Binding PreviousPageCommand}" ZIndex="1" />
+        <Button Content="&gt;" HorizontalAlignment="Right" VerticalAlignment="Center" Command="{Binding NextPageCommand}" ZIndex="1" />
+        <!-- TODO (build order step 6): temporary, replaced by the "Add Page" tile in the page overview. -->
+        <Button Content="+ Page" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,40,0" Command="{Binding AddPageCommand}" ZIndex="1" />
+
+        <!-- CarouselItems pads Pages with a clone of the last page at index 0 and a clone of the
+             first page at the end. Swiping/advancing one step past either real end lands on a
+             clone; MainView.axaml.cs then silently snaps back to the matching real index (see
+             OnCarouselSelectionChanged) — the illusion of a seamless, endless carousel. -->
+        <Carousel x:Name="PageCarousel"
+                  ItemsSource="{Binding CarouselItems}"
+                  SelectedIndex="{Binding SelectedCarouselIndex}"
+                  IsSwipeEnabled="True">
+            <Carousel.PageTransition>
+                <PageSlide Duration="0:0:0.25" Orientation="Horizontal" />
+            </Carousel.PageTransition>
+            <Carousel.ItemTemplate>
+                <DataTemplate DataType="vm:PageViewModel">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Background="{Binding ThemeBrush}" Padding="12">
+                            <TextBlock Text="{Binding Title}" HorizontalAlignment="Center" FontSize="20" FontWeight="Bold" />
+                        </Border>
+
+                        <!-- Rows/Columns are per-page and user-configurable; UniformGrid picks them
+                             up from the bound PageViewModel so resizing the grid is just changing
+                             those numbers. -->
+                        <ItemsControl ItemsSource="{Binding Pads}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="{Binding Rows}" Columns="{Binding Columns}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:PadViewModel">
+                                    <controls:PadButton Margin="4" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DockPanel>
+                </DataTemplate>
+            </Carousel.ItemTemplate>
+        </Carousel>
+
+        <!-- Shown as an in-place overlay rather than a separate Window: Avalonia's Window/ShowDialog
+             needs an owner Window, which doesn't meaningfully exist under Android's single-view
+             lifetime. An overlay works identically on Desktop and Android. -->
+        <ContentControl IsVisible="{Binding ActiveConfig, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+            <views:PadConfigView DataContext="{Binding ActiveConfig}" />
+        </ContentControl>
+    </Panel>
 </UserControl>

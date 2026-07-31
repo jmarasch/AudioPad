@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AudioPad.UI.ViewModels"
+             xmlns:controls="using:AudioPad.UI.Controls"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="AudioPad.UI.Views.PageOverviewView"
+             x:DataType="vm:MainWindowViewModel">
+    <UserControl.Styles>
+        <Style Selector="Button.armed">
+            <Setter Property="Background" Value="#C62828" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Background="#EE1E1E1E" RowDefinitions="Auto,*">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+            <Button Grid.Column="0"
+                    Content="{Binding IsDeleteArmed, Converter={x:Static conv:ObjectConverters.IsNotNull}, ConverterParameter=x}"
+                    Classes.armed="{Binding IsDeleteArmed}"
+                    Command="{Binding DeleteSelectedPageCommand}"
+                    IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+            <!-- TODO (build order step 7): wire to PageConfigView once it exists. -->
+            <Button Grid.Column="1"
+                    Content="Settings"
+                    Margin="8,0,0,0"
+                    IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+            <Button Grid.Column="3" Content="+ Add Page" Command="{Binding AddPageCommand}" Margin="0,0,8,0" />
+            <Button Grid.Column="4" Content="Close" Command="{Binding CloseOverviewCommand}" />
+        </Grid>
+
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Pages}"
+                 SelectedItem="{Binding SelectedOverviewPage}"
+                 Margin="12">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="vm:PageViewModel">
+                    <controls:PageTile Margin="8" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

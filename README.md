@@ -58,6 +58,18 @@ dotnet test tests/AudioPad.Core.Tests
 dotnet build src/AudioPad.Android -f net10.0-android
 ```
 
+## Packaging for testing on another machine
+
+```bash
+./package.sh
+```
+
+Publishes a self-contained Desktop build for Linux and Windows plus a signed, installable Android
+APK into `bin/Linux/`, `bin/Windows/`, and `bin/Android/` respectively — each one is everything
+needed to copy/zip that folder (or `.apk`) and hand it to someone to run, without them needing the
+.NET SDK installed. Linux still needs libVLC installed system-wide on the target machine (see
+above); Windows and Android bundle libVLC's native binaries.
+
 ## Project layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full directory breakdown, the reasoning

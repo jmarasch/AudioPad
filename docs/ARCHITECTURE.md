@@ -2,7 +2,7 @@
 
 ## Why this split
 
-`Core` has zero UI or platform dependencies, so the grid/pad domain model and profile
+`Core` has zero UI or platform dependencies, so the setup/page/pad domain model and its
 persistence are trivially unit-testable and reusable everywhere. `Audio` isolates the one
 component with a messy native-binary story (libVLC) behind `IAudioEngine`, so it could be
 swapped out later without touching `UI` or `Core`. `UI` is one shared Avalonia project (views,
@@ -14,35 +14,48 @@ AudioPad/
 ├── AudioPad.slnx
 ├── Directory.Packages.props   # central NuGet package versions for every project
 ├── src/
-│   ├── AudioPad.Core/          # models, IAudioEngine, profile persistence — no UI, no platform code
+│   ├── AudioPad.Core/          # models, IAudioEngine, persistence — no UI, no platform code
 │   │   ├── Models/
 │   │   │   ├── PlaybackMode.cs     # enum: Latch, Loop
 │   │   │   ├── PadConfig.cs        # one button's saved config: file, mode, volume, label, icon, position
-│   │   │   └── GridProfile.cs      # rows, columns, the pads in them
+│   │   │   ├── Page.cs             # one titled, themed grid: rows, columns, the pads in them
+│   │   │   └── Setup.cs            # the whole saved state: an ordered list of pages
 │   │   ├── Playback/
 │   │   │   ├── IAudioEngine.cs             # Play/Stop/SetVolume/IsPlaying + PlaybackStateChanged event
 │   │   │   ├── PadRuntimeState.cs          # live IsPlaying, separate from saved PadConfig
 │   │   │   └── PlaybackStateChangedEventArgs.cs
 │   │   └── Persistence/
-│   │       └── ProfileRepository.cs    # load/save GridProfile as JSON
+│   │       ├── AppStorage.cs           # app-private data dirs under LocalApplicationData
+│   │       ├── SetupRepository.cs      # load/save the whole Setup as JSON
+│   │       └── SetupArchive.cs         # export/import a Page or Setup as a portable zip + media
 │   │
 │   ├── AudioPad.Audio/         # IAudioEngine implementation backed by LibVLCSharp (libVLC)
-│   │                           # NOT YET IMPLEMENTED — next milestone, see "What's next" below
+│   │   └── LibVlcAudioEngine.cs    # one LibVLC instance, one MediaPlayer per playing pad
 │   │
 │   ├── AudioPad.UI/            # Shared Avalonia app: Views, ViewModels, Controls (MVVM)
+│   │   ├── NullAudioEngine.cs      # no-op IAudioEngine for the XAML previewer/design time
 │   │   ├── ViewModels/
-│   │   │   ├── MainWindowViewModel.cs  # owns the current GridProfile, exposes it as PadViewModels
-│   │   │   └── PadViewModel.cs         # one pad: label, lit state, press command
+│   │   │   ├── MainWindowViewModel.cs  # owns the Setup, exposes PageViewModels, tracks the current
+│   │   │   │                           # page, ActiveConfig overlay, and overview selection
+│   │   │   ├── PageViewModel.cs        # one page: title, theme color, its PadViewModels
+│   │   │   ├── PadViewModel.cs         # one pad: label, icon, lit state driven by IAudioEngine
+│   │   │   └── PadConfigViewModel.cs   # working copy of one pad's editable fields (file/mode/volume/…)
 │   │   ├── Views/
-│   │   │   └── MainView.axaml          # renders the UniformGrid of pads (shared by Desktop + Android)
-│   │   └── Controls/
-│   │       └── PadButton.axaml         # one grid button, styled "lit" when playing
+│   │   │   ├── MainView.axaml          # renders the current page's grid + the config overlay
+│   │   │   ├── PadConfigView.axaml     # double-tap config UI, shown as an in-place overlay
+│   │   │   └── PageOverviewView.axaml  # all pages as tiles: add/delete/reorder/navigate
+│   │   ├── Controls/
+│   │   │   ├── PadButton.axaml         # one grid button, styled "lit" when playing, double-tap to configure
+│   │   │   └── PageTile.axaml          # one page's tile in the overview, double-tap to open it
+│   │   └── Interactions/
+│   │       ├── HoldDragReorderBehavior.cs  # hold-then-drag-to-swap, shared by pads and page tiles
+│   │       └── VisualTreeHelpers.cs        # ancestor-DataContext lookup used by the above
 │   │
-│   ├── AudioPad.Desktop/       # Entry point for Windows + Linux
-│   └── AudioPad.Android/       # Entry point for Android
+│   ├── AudioPad.Desktop/       # Entry point for Windows + Linux — composition root wires LibVlcAudioEngine
+│   └── AudioPad.Android/       # Entry point for Android — composition root wires LibVlcAudioEngine
 │
 └── tests/
-    └── AudioPad.Core.Tests/    # xUnit — profile serialization, grid/pad model logic
+    └── AudioPad.Core.Tests/    # xUnit — setup/page serialization, archive round-trips, model logic
 ```
 
 ## Coding conventions
@@ -70,16 +83,61 @@ Linux — on Linux, libVLC must already be installed on the machine (`sudo apt i
 a full VLC install). This is a runtime dependency for end users, not just a dev-machine
 requirement; it'll need to be called out wherever AudioPad is distributed for Linux.
 
-## What's next (not in this scaffold)
+## `EndReached` threading and the config overlay
 
-1. **`AudioPad.Audio` — the real audio engine.** Implement `IAudioEngine` on top of
-   `LibVLCSharp`: one `LibVLC` instance, one `MediaPlayer` per currently-playing pad (so multiple
-   clips can run at once), Latch (press-to-interrupt) vs. Loop (restart on `EndReached`) behavior,
-   and per-pad volume. LibVLC's `EndReached` event fires on a libVLC-internal thread, so care is
-   needed there (don't block/call `Stop()` synchronously from inside the callback).
-2. **Wire `MainWindowViewModel`/`PadViewModel` to `IAudioEngine`** instead of the current local
-   `IsLit` toggle placeholder, and to `ProfileRepository` for loading/saving the active profile.
-3. **Double-tap-to-configure**: a `PadConfigWindow` + `PadConfigViewModel` for setting a pad's
-   audio file (file picker), mode, volume, label, and icon.
-4. **User-configurable grid size**: a settings surface for changing `GridProfile.Rows`/`Columns`
-   at runtime, preserving existing pad configs where positions still exist.
+`LibVlcAudioEngine`'s `EndReached` event fires on a libVLC-internal thread; calling `Stop()`
+synchronously from inside that callback deadlocks (`Stop()` blocks until VLC's internal threads
+join). The handler hops off that thread first via `ThreadPool.QueueUserWorkItem`, then does the
+Loop-restart-or-Latch-teardown under the engine's lock. `PadViewModel` in turn marshals the
+resulting `IsLit` update onto the UI thread with `Dispatcher.UIThread.Post`, since the event can
+arrive from that same background thread.
+
+The double-tap config UI (`PadConfigView`) is a `UserControl` shown as an in-place overlay in
+`MainView`, not a separate `Window`: Avalonia's `Window.ShowDialog` requires an owner `Window`,
+which doesn't meaningfully exist under Android's single-view activity lifetime. An overlay whose
+visibility is driven by `MainWindowViewModel.ActiveConfig` being non-null works identically on
+Desktop and Android.
+
+## Pages, and why `Setup` wraps them
+
+A `Setup` is an ordered list of `Page`s, each its own titled, themed grid with independent
+`Rows`/`Columns`. Pages are navigated as an endless carousel in `MainView`, or managed as a whole
+in `PageOverviewView`. Keeping the grid dimensions on `Page` rather than globally means one setup
+can mix a 4×4 board with a 6×8 one, and `Page.Resize` preserves every pad whose position is still
+in bounds instead of rebuilding the grid from scratch.
+
+`PadConfig` stores its own `Row`/`Column` rather than living in a 2-D array, so reordering is a
+swap of two positions and serialization stays a flat list.
+
+## `SetupArchive` is stream-based, not path-based
+
+Export/import bundles copies of every referenced audio and icon file into a zip, so an exported
+page opens correctly on a *different machine* — not just a different path on the same one. Media
+is de-duplicated per distinct source path, and name collisions get a ` (n)` suffix.
+
+The API takes `Stream` rather than a file path deliberately: on Android both the export
+destination and the import source are typically Storage Access Framework `content://` handles, not
+plain files, so the UI layer always drives this through `IStorageFile.OpenWriteAsync()` /
+`OpenReadAsync()`. Imported media is extracted into app-private storage via `AppStorage`, which is
+also where `PadConfigView` copies picked files to — for the same reason, a `content://` URI isn't
+something native playback code can open directly.
+
+## Hold-drag reordering instead of `DragDrop`
+
+`HoldDragReorderBehavior<TItem>` powers reordering for both pads and page tiles. It's built on
+Avalonia's native long-press gesture rather than `Avalonia.Input.DragDrop` because it needs full
+control over the in-place drag visual (a plain `TranslateTransform` follow) instead of an OS-level
+drag cursor, and needs to behave identically for a fixed grid and a reflowing wrap panel.
+
+Two non-obvious details are load-bearing: the pointer is captured on *every* press so `PointerMoved`
+keeps arriving once the pointer leaves the item's own bounds, and the handlers are registered with
+`handledEventsToo: true` because `Button` marks its own pointer events handled, which would
+otherwise stop a plain `+=` subscription from ever firing.
+
+## What's next
+
+1. **`PageConfigView`**: a per-page settings surface for title, theme color, and grid size
+   (`Page.Resize` already backs the last one). The overview's Settings button is wired to nothing
+   until this exists — see the TODO in `PageOverviewView.axaml`.
+2. **Replace the temporary "+ Page" button** in `MainView` with the Add Page tile in the overview
+   — see the TODO in `MainView.axaml`.
