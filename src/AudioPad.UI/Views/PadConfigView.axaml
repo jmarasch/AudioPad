@@ -3,8 +3,8 @@
              xmlns:vm="using:AudioPad.UI.ViewModels"
              x:Class="AudioPad.UI.Views.PadConfigView"
              x:DataType="vm:PadConfigViewModel">
-    <Border Background="#CC000000">
-        <Border Background="#FF2B2B2B"
+    <Border Background="{DynamicResource OverlayScrimBrush}">
+        <Border Background="{DynamicResource OverlayPanelBrush}"
                 CornerRadius="8"
                 Padding="24"
                 Width="360"

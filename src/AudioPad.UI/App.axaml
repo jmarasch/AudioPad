@@ -9,6 +9,29 @@
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <!-- Overlay chrome has to be declared per theme variant rather than hardcoded. The overlays
+         set their own background but inherit the theme's default text color, so a fixed dark
+         panel renders black-on-black under the light variant — which is what Android gets by
+         default, even when the desktop machine happens to be dark. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="OverlayScrimBrush" Color="#66000000" />
+                    <SolidColorBrush x:Key="OverlayPanelBrush" Color="#FFFAFAFA" />
+                    <SolidColorBrush x:Key="OverviewBackgroundBrush" Color="#FAFAFAFA" />
+                    <SolidColorBrush x:Key="OverlayWarningBrush" Color="#E65100" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="OverlayScrimBrush" Color="#CC000000" />
+                    <SolidColorBrush x:Key="OverlayPanelBrush" Color="#FF2B2B2B" />
+                    <SolidColorBrush x:Key="OverviewBackgroundBrush" Color="#EE1E1E1E" />
+                    <SolidColorBrush x:Key="OverlayWarningBrush" Color="#FFB74D" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>

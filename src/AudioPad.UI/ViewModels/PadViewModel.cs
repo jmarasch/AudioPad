@@ -40,6 +40,13 @@ public sealed partial class PadViewModel : ViewModelBase
         IconBitmap = LoadIconBitmap(Config.IconPath);
     }
 
+    /// <summary>
+    /// Stops listening to the audio engine, for a pad discarded by a grid resize. The engine
+    /// outlives individual pads, so without this its event would keep the dropped view model
+    /// alive and firing.
+    /// </summary>
+    public void Detach() => _audioEngine.PlaybackStateChanged -= OnPlaybackStateChanged;
+
     [RelayCommand]
     private void Toggle() => _audioEngine.Play(Config);
 

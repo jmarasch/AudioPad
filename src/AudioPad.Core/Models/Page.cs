@@ -38,23 +38,23 @@ public sealed class Page
 
     /// <summary>
     /// Changes the grid size: adds blank pads for newly in-bounds cells, drops pads that fall
-    /// outside the new bounds, and leaves everything else untouched.
+    /// outside the new bounds, and leaves everything else untouched. Rebuilds the list in
+    /// row-major order rather than appending, because the UI lays pads out in collection order —
+    /// appending new cells at the end would scatter them across the wrong grid positions.
     /// </summary>
     public void Resize(int rows, int columns)
     {
-        Pads.RemoveAll(pad => pad.Row >= rows || pad.Column >= columns);
+        var resized = new List<PadConfig>(rows * columns);
 
         for (var row = 0; row < rows; row++)
         {
             for (var column = 0; column < columns; column++)
             {
-                if (FindPad(row, column) is null)
-                {
-                    Pads.Add(new PadConfig { Row = row, Column = column });
-                }
+                resized.Add(FindPad(row, column) ?? new PadConfig { Row = row, Column = column });
             }
         }
 
+        Pads = resized;
         Rows = rows;
         Columns = columns;
     }

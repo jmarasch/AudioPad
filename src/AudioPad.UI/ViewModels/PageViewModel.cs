@@ -8,6 +8,8 @@ namespace AudioPad.UI.ViewModels;
 /// <summary>Wraps one <see cref="Page"/> with its pads and display state, for the carousel/grid to bind to.</summary>
 public sealed class PageViewModel : ViewModelBase
 {
+    private readonly IAudioEngine _audioEngine;
+    private readonly Action<PadViewModel> _onPadConfigRequested;
     private readonly Action _onChanged;
 
     public Page Page { get; }
@@ -25,20 +27,22 @@ public sealed class PageViewModel : ViewModelBase
     public PageViewModel(Page page, IAudioEngine audioEngine, Action<PadViewModel> onPadConfigRequested, Action onChanged)
     {
         Page = page;
+        _audioEngine = audioEngine;
+        _onPadConfigRequested = onPadConfigRequested;
         _onChanged = onChanged;
 
         Pads = new ObservableCollection<PadViewModel>();
-        foreach (var padConfig in page.Pads)
-        {
-            var pad = new PadViewModel(padConfig, audioEngine);
-            pad.ConfigRequested += onPadConfigRequested;
-            Pads.Add(pad);
-        }
+        SyncPadsWithPage();
     }
 
-    /// <summary>Re-reads display state from <see cref="Page"/> after its settings have been edited and saved.</summary>
+    /// <summary>
+    /// Re-reads display state from <see cref="Page"/> after its settings have been edited and
+    /// saved, rebuilding the pad list too since those settings include the grid size.
+    /// </summary>
     public void RefreshFromPage()
     {
+        SyncPadsWithPage();
+
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(ThemeBrush));
         OnPropertyChanged(nameof(Rows));
@@ -46,23 +50,76 @@ public sealed class PageViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Swaps two pads' grid positions (both their <see cref="PadConfig"/> Row/Column — the
-    /// persisted, positionally-meaningful identity — and their position in <see cref="Pads"/>,
-    /// since the UniformGrid lays items out in collection order, not by reading Row/Column).
+    /// Brings <see cref="Pads"/> back in line with <see cref="Page"/>'s pads after a resize. Pads
+    /// that survived keep their existing view model, so one that's mid-playback keeps its lit
+    /// state; the ones that didn't are detached so they stop listening to the audio engine.
     /// </summary>
-    public void SwapPads(PadViewModel a, PadViewModel b)
+    private void SyncPadsWithPage()
     {
-        var indexA = Pads.IndexOf(a);
-        var indexB = Pads.IndexOf(b);
-        if (indexA < 0 || indexB < 0 || indexA == indexB)
+        var existing = Pads.ToDictionary(pad => pad.Config.Id);
+        var synced = new List<PadViewModel>(Page.Pads.Count);
+
+        foreach (var padConfig in Page.Pads)
+        {
+            if (existing.Remove(padConfig.Id, out var pad))
+            {
+                synced.Add(pad);
+                continue;
+            }
+
+            pad = new PadViewModel(padConfig, _audioEngine);
+            pad.ConfigRequested += _onPadConfigRequested;
+            synced.Add(pad);
+        }
+
+        foreach (var dropped in existing.Values)
+        {
+            dropped.ConfigRequested -= _onPadConfigRequested;
+            dropped.Detach();
+        }
+
+        Pads.Clear();
+        foreach (var pad in synced)
+        {
+            Pads.Add(pad);
+        }
+    }
+
+    /// <summary>
+    /// Moves a pad into another pad's slot, sliding everything between the two along to make room
+    /// — reordering a list, not swapping a pair. Dragging pad 1 onto pad 5 leaves 2-5 shifted back
+    /// by one rather than dumping pad 5 into the vacated slot, which is what "rearranging notes on
+    /// a page" does and what makes a run of related pads stay in order.
+    /// </summary>
+    public void MovePad(PadViewModel source, PadViewModel target)
+    {
+        var from = Pads.IndexOf(source);
+        var to = Pads.IndexOf(target);
+        if (from < 0 || to < 0 || from == to)
         {
             return;
         }
 
-        (a.Config.Row, b.Config.Row) = (b.Config.Row, a.Config.Row);
-        (a.Config.Column, b.Config.Column) = (b.Config.Column, a.Config.Column);
-        (Pads[indexA], Pads[indexB]) = (Pads[indexB], Pads[indexA]);
+        Pads.Move(from, to);
+
+        Page.Pads.RemoveAt(from);
+        Page.Pads.Insert(to, source.Config);
+        ReassignGridPositions();
 
         _onChanged();
+    }
+
+    /// <summary>
+    /// Re-derives every pad's Row/Column from its place in the list. Collection order is what the
+    /// UniformGrid actually lays out, so after a reorder the stored coordinates have to be brought
+    /// back in line with it — otherwise a later resize (which reads Row/Column) would scatter them.
+    /// </summary>
+    private void ReassignGridPositions()
+    {
+        for (var index = 0; index < Page.Pads.Count; index++)
+        {
+            Page.Pads[index].Row = index / Page.Columns;
+            Page.Pads[index].Column = index % Page.Columns;
+        }
     }
 }

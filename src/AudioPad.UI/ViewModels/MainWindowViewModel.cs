@@ -24,7 +24,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// end and then be silently snapped back to the corresponding real page — the illusion of a
     /// seamless, endless carousel. See <see cref="IsSentinelIndex"/>/<see cref="ResolveSentinelIndex"/>.
     /// </summary>
-    public ObservableCollection<PageViewModel> CarouselItems { get; } = new();
+    public ObservableCollection<CarouselSlot> CarouselItems { get; } = new();
 
     /// <summary>Two-way bound to the Carousel's SelectedIndex. Starts at 1: the first real page.</summary>
     [ObservableProperty]
@@ -33,6 +33,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>The pad currently being edited via the double-tap overlay, or null when it's closed.</summary>
     [ObservableProperty]
     private PadConfigViewModel? _activeConfig;
+
+    /// <summary>The page whose settings are being edited from the overview, or null when closed.</summary>
+    [ObservableProperty]
+    private PageConfigViewModel? _activePageConfig;
 
     /// <summary>Whether the zoomed-out page overview is open.</summary>
     [ObservableProperty]
@@ -69,6 +73,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         RebuildCarouselItems();
     }
+
+    /// <summary>
+    /// Label for the overview's delete button. Deleting is confirm-by-repeating rather than a
+    /// modal, so the button has to say which press it's on.
+    /// </summary>
+    public string DeleteButtonText => IsDeleteArmed ? "Confirm delete" : "Delete";
 
     /// <summary>True if a Carousel index is one of the sentinel clones at either end.</summary>
     public bool IsSentinelIndex(int carouselIndex) => carouselIndex == 0 || carouselIndex == CarouselItems.Count - 1;
@@ -139,24 +149,77 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         PersistSetup();
     }
 
-    partial void OnSelectedOverviewPageChanged(PageViewModel? value) => IsDeleteArmed = false;
-
-    /// <summary>Swaps two pages' positions — the reorder mechanic driven by the page overview's
-    /// hold-drag gesture, matching <see cref="PageViewModel.SwapPads"/>'s semantics for pads.</summary>
-    public void SwapPages(PageViewModel a, PageViewModel b)
+    /// <summary>Opens the settings overlay for the page selected in the overview.</summary>
+    [RelayCommand]
+    private void ConfigureSelectedPage()
     {
-        var indexA = Pages.IndexOf(a);
-        var indexB = Pages.IndexOf(b);
-        if (indexA < 0 || indexB < 0 || indexA == indexB)
+        if (SelectedOverviewPage is not { } page)
         {
             return;
         }
 
-        (Pages[indexA], Pages[indexB]) = (Pages[indexB], Pages[indexA]);
-        (_setup.Pages[indexA], _setup.Pages[indexB]) = (_setup.Pages[indexB], _setup.Pages[indexA]);
+        ActivePageConfig = new PageConfigViewModel(page.Page, saved => OnPageConfigClosed(page, saved));
+    }
 
-        RebuildCarouselItems();
+    private void OnPageConfigClosed(PageViewModel page, bool saved)
+    {
+        if (saved)
+        {
+            page.RefreshFromPage();
+            PersistSetup();
+        }
+
+        ActivePageConfig = null;
+    }
+
+    partial void OnSelectedOverviewPageChanged(PageViewModel? value) => IsDeleteArmed = false;
+
+    partial void OnIsDeleteArmedChanged(bool value) => OnPropertyChanged(nameof(DeleteButtonText));
+
+    /// <summary>Moves a page into another's position, shifting the pages between them along —
+    /// the same list-reorder semantics as <see cref="PageViewModel.MovePad"/>.</summary>
+    public void MovePage(PageViewModel source, PageViewModel target)
+    {
+        var from = Pages.IndexOf(source);
+        var to = Pages.IndexOf(target);
+        if (from < 0 || to < 0 || from == to)
+        {
+            return;
+        }
+
+        Pages.Move(from, to);
+
+        var page = _setup.Pages[from];
+        _setup.Pages.RemoveAt(from);
+        _setup.Pages.Insert(to, page);
+
+        MirrorReorderIntoCarousel(from, to);
         PersistSetup();
+    }
+
+    /// <summary>
+    /// Applies a page reorder to <see cref="CarouselItems"/> as a move plus, at most, two sentinel
+    /// replacements — never a full rebuild. <see cref="RebuildCarouselItems"/> clears and re-adds,
+    /// which raises a Reset that makes the bound Carousel discard its SelectedIndex; doing that
+    /// while the overview is covering it left the carousel showing a stale page and refusing to
+    /// navigate afterwards. A Move notification keeps the Carousel's own bookkeeping intact.
+    /// </summary>
+    private void MirrorReorderIntoCarousel(int from, int to)
+    {
+        // CarouselItems is Pages padded with one sentinel at each end, so real page N sits at N+1.
+        CarouselItems.Move(from + 1, to + 1);
+
+        // Moving the first or last page changes which page the sentinels stand in for.
+        var last = CarouselItems.Count - 1;
+        if (!ReferenceEquals(CarouselItems[0].Page, Pages[^1]))
+        {
+            CarouselItems[0] = new CarouselSlot(Pages[^1]);
+        }
+
+        if (!ReferenceEquals(CarouselItems[last].Page, Pages[0]))
+        {
+            CarouselItems[last] = new CarouselSlot(Pages[0]);
+        }
     }
 
     /// <summary>
@@ -170,17 +233,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void RebuildCarouselItems()
     {
         var selectedPage = SelectedCarouselIndex >= 0 && SelectedCarouselIndex < CarouselItems.Count
-            ? CarouselItems[SelectedCarouselIndex]
+            ? CarouselItems[SelectedCarouselIndex].Page
             : null;
 
         CarouselItems.Clear();
-        CarouselItems.Add(Pages[^1]);
+        CarouselItems.Add(new CarouselSlot(Pages[^1]));
         foreach (var page in Pages)
         {
-            CarouselItems.Add(page);
+            CarouselItems.Add(new CarouselSlot(page));
         }
 
-        CarouselItems.Add(Pages[0]);
+        CarouselItems.Add(new CarouselSlot(Pages[0]));
 
         var realIndex = selectedPage is null ? -1 : Pages.IndexOf(selectedPage);
         SelectedCarouselIndex = realIndex >= 0 ? realIndex + 1 : 1;

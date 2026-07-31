@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AudioPad.UI.ViewModels"
+             x:Class="AudioPad.UI.Views.PageConfigView"
+             x:DataType="vm:PageConfigViewModel">
+    <Border Background="{DynamicResource OverlayScrimBrush}">
+        <Border Background="{DynamicResource OverlayPanelBrush}"
+                CornerRadius="8"
+                Padding="24"
+                Width="360"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Page Settings" FontSize="18" FontWeight="Bold" />
+
+                <TextBlock Text="Title" />
+                <TextBox Text="{Binding Title}" />
+
+                <TextBlock Text="Header color" />
+                <ComboBox ItemsSource="{Binding AvailableThemeColors}"
+                          SelectedItem="{Binding ThemeColor}"
+                          HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Background="{Binding}" Width="20" Height="20" CornerRadius="4" />
+                                <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Text="Grid size" />
+                <Grid ColumnDefinitions="*,Auto,*">
+                    <ComboBox Grid.Column="0"
+                              ItemsSource="{Binding AvailableGridSizes}"
+                              SelectedItem="{Binding Rows}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="1" Text="×" Margin="8,0" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="2"
+                              ItemsSource="{Binding AvailableGridSizes}"
+                              SelectedItem="{Binding Columns}"
+                              HorizontalAlignment="Stretch" />
+                </Grid>
+
+                <!-- Resizing smaller drops the out-of-bounds pads and whatever was configured on
+                     them, so say so before it happens rather than after. -->
+                <TextBlock Text="Shrinking the grid deletes the pads that no longer fit."
+                           IsVisible="{Binding IsShrinking}"
+                           Foreground="{DynamicResource OverlayWarningBrush}"
+                           TextWrapping="Wrap" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Border>
+</UserControl>

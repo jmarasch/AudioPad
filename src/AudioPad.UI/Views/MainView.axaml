@@ -16,10 +16,12 @@
     </Design.DataContext>
 
     <Panel>
+        <!-- Pinch in to zoom out to the page overview, pinch out to come back — the gesture the
+             zoomed-out/zoomed-in relationship already implies. Two-fingered, so it can't be
+             confused with the Carousel's one-finger swipe or a pad's hold-drag. -->
         <Button Content="&lt;" HorizontalAlignment="Left" VerticalAlignment="Center" Command="{Binding PreviousPageCommand}" ZIndex="1" />
         <Button Content="&gt;" HorizontalAlignment="Right" VerticalAlignment="Center" Command="{Binding NextPageCommand}" ZIndex="1" />
-        <!-- TODO (build order step 6): temporary, replaced by the "Add Page" tile in the page overview. -->
-        <Button Content="+ Page" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,40,0" Command="{Binding AddPageCommand}" ZIndex="1" />
+        <Button Content="Pages" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,40,0" Command="{Binding OpenPageOverviewCommand}" ZIndex="1" />
 
         <!-- CarouselItems pads Pages with a clone of the last page at index 0 and a clone of the
              first page at the end. Swiping/advancing one step past either real end lands on a
@@ -33,16 +35,18 @@
                 <PageSlide Duration="0:0:0.25" Orientation="Horizontal" />
             </Carousel.PageTransition>
             <Carousel.ItemTemplate>
-                <DataTemplate DataType="vm:PageViewModel">
+                <DataTemplate DataType="vm:CarouselSlot">
                     <DockPanel>
-                        <Border DockPanel.Dock="Top" Background="{Binding ThemeBrush}" Padding="12">
-                            <TextBlock Text="{Binding Title}" HorizontalAlignment="Center" FontSize="20" FontWeight="Bold" />
+                        <Border DockPanel.Dock="Top" Background="{Binding Page.ThemeBrush}" Padding="12">
+                            <TextBlock Text="{Binding Page.Title}" HorizontalAlignment="Center" FontSize="20" FontWeight="Bold" />
                         </Border>
 
-                        <!-- Rows/Columns are per-page and user-configurable; UniformGrid picks them
-                             up from the bound PageViewModel so resizing the grid is just changing
-                             those numbers. -->
-                        <ItemsControl ItemsSource="{Binding Pads}">
+                        <!-- DataContext drops to the PageViewModel here so everything below binds to
+                             the page itself — including the pad grid's owner lookup, which resolves
+                             the items control's DataContext when a drag starts.
+                             Rows/Columns are per-page and user-configurable; UniformGrid picks them
+                             up so resizing the grid is just changing those numbers. -->
+                        <ItemsControl DataContext="{Binding Page}" ItemsSource="{Binding Pads}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <UniformGrid Rows="{Binding Rows}" Columns="{Binding Columns}" />
@@ -64,6 +68,17 @@
              lifetime. An overlay works identically on Desktop and Android. -->
         <ContentControl IsVisible="{Binding ActiveConfig, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
             <views:PadConfigView DataContext="{Binding ActiveConfig}" />
+        </ContentControl>
+
+        <!-- The zoomed-out page manager. Inherits this view's DataContext, since it binds the
+             MainWindowViewModel's page collection and commands directly. -->
+        <ContentControl IsVisible="{Binding IsPageOverviewOpen}" ZIndex="2">
+            <views:PageOverviewView />
+        </ContentControl>
+
+        <!-- Above the overview: it's opened from the overview's Settings button. -->
+        <ContentControl IsVisible="{Binding ActivePageConfig, Converter={x:Static conv:ObjectConverters.IsNotNull}}" ZIndex="3">
+            <views:PageConfigView DataContext="{Binding ActivePageConfig}" />
         </ContentControl>
     </Panel>
 </UserControl>

@@ -77,4 +77,28 @@ public class PageTests
         Assert.Single(page.Pads);
         Assert.Null(page.FindPad(1, 1));
     }
+
+    [Fact]
+    public void Resize_LeavesPadsInRowMajorOrder()
+    {
+        // The UI lays pads out in collection order, so growing the grid must interleave the new
+        // cells into position rather than appending them after the surviving ones.
+        var page = Page.CreateDefault(rows: 2, columns: 2);
+
+        page.Resize(rows: 3, columns: 3);
+
+        var expected = new[] { (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2) };
+        Assert.Equal(expected, page.Pads.Select(pad => (pad.Row, pad.Column)));
+    }
+
+    [Fact]
+    public void Resize_KeepsTheSamePadInstances_WhenPositionStillInBounds()
+    {
+        var page = Page.CreateDefault(rows: 2, columns: 2);
+        var original = page.FindPad(1, 1)!;
+
+        page.Resize(rows: 3, columns: 3);
+
+        Assert.Same(original, page.FindPad(1, 1));
+    }
 }

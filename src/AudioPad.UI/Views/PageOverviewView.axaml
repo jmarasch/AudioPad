@@ -11,17 +11,17 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid Background="#EE1E1E1E" RowDefinitions="Auto,*">
+    <Grid Background="{DynamicResource OverviewBackgroundBrush}" RowDefinitions="Auto,*">
         <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
             <Button Grid.Column="0"
-                    Content="{Binding IsDeleteArmed, Converter={x:Static conv:ObjectConverters.IsNotNull}, ConverterParameter=x}"
+                    Content="{Binding DeleteButtonText}"
                     Classes.armed="{Binding IsDeleteArmed}"
                     Command="{Binding DeleteSelectedPageCommand}"
                     IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-            <!-- TODO (build order step 7): wire to PageConfigView once it exists. -->
             <Button Grid.Column="1"
                     Content="Settings"
                     Margin="8,0,0,0"
+                    Command="{Binding ConfigureSelectedPageCommand}"
                     IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
             <Button Grid.Column="3" Content="+ Add Page" Command="{Binding AddPageCommand}" Margin="0,0,8,0" />
             <Button Grid.Column="4" Content="Close" Command="{Binding CloseOverviewCommand}" />
@@ -31,16 +31,20 @@
                  ItemsSource="{Binding Pages}"
                  SelectedItem="{Binding SelectedOverviewPage}"
                  Margin="12">
-            <ListBox.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <WrapPanel />
-                </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
+            <!-- A single vertical column: pages are an ordered sequence, and a list makes that
+                 order — and where a dragged page will land — unambiguous in a way a reflowing
+                 grid does not. -->
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="vm:PageViewModel">
-                    <controls:PageTile Margin="8" />
+                    <controls:PageTile Margin="4" HorizontalAlignment="Stretch" />
                 </DataTemplate>
             </ListBox.ItemTemplate>
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                </Style>
+            </ListBox.Styles>
         </ListBox>
     </Grid>
 </UserControl>
