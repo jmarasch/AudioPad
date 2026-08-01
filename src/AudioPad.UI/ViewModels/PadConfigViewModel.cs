@@ -21,6 +21,13 @@ public sealed partial class PadConfigViewModel : ViewModelBase
     private readonly string? _originalAudioPath;
     private readonly string? _originalIconPath;
 
+    /// <summary>
+    /// Files copied into the library while this dialog has been open. An import happens the moment
+    /// a file is picked, so cancelling — or importing twice, or importing then clearing — would
+    /// otherwise leave copies in the library that no pad will ever point at.
+    /// </summary>
+    private readonly List<string> _importedHere = [];
+
     [ObservableProperty]
     private string _label;
 
@@ -105,6 +112,10 @@ public sealed partial class PadConfigViewModel : ViewModelBase
         _activeHoverColor = PadColorPresets.Select(ActiveHoverChoices, target.Colors.ActiveHover);
     }
 
+    /// <summary>Records a file this dialog has just copied in, so it can be cleaned up if it ends
+    /// up unused.</summary>
+    public void TrackImport(string path) => _importedHere.Add(path);
+
     partial void OnAudioDisplayNameChanged(string? value) => OnPropertyChanged(nameof(AudioFileName));
 
     partial void OnIconDisplayNameChanged(string? value) => OnPropertyChanged(nameof(IconFileName));
@@ -142,6 +153,9 @@ public sealed partial class PadConfigViewModel : ViewModelBase
             ActiveHover = ActiveHoverColor.Value,
         };
 
+        // Anything imported during this visit that isn't what the pad ended up with — an import
+        // replaced by a second one, or undone by Clear — is now unreachable.
+        DiscardUnusedImports();
         _onClose(true);
     }
 
@@ -168,6 +182,30 @@ public sealed partial class PadConfigViewModel : ViewModelBase
         Save();
     }
 
+    /// <summary>
+    /// Walks away, undoing any file copied in while the dialog was open. Cancelling has to mean the
+    /// pad is untouched *and* nothing was left behind — importing already wrote a copy to disk by
+    /// the time the picker closed.
+    /// </summary>
     [RelayCommand]
-    private void Cancel() => _onClose(false);
+    private void Cancel()
+    {
+        foreach (var path in _importedHere)
+        {
+            MediaLibrary.Delete(path);
+        }
+
+        _importedHere.Clear();
+        _onClose(false);
+    }
+
+    private void DiscardUnusedImports()
+    {
+        foreach (var path in _importedHere.Where(path => path != AudioFilePath && path != IconPath))
+        {
+            MediaLibrary.Delete(path);
+        }
+
+        _importedHere.Clear();
+    }
 }

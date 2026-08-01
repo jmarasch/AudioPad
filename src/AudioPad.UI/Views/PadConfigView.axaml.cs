@@ -9,9 +9,16 @@ namespace AudioPad.UI.Views;
 
 public partial class PadConfigView : UserControl
 {
+    /// <summary>
+    /// Both a pattern list and MIME types, because the two platforms filter differently: desktop
+    /// pickers match extensions, Android's document picker matches MIME types and ignores patterns
+    /// entirely. With patterns alone the Android picker has nothing to select.
+    /// </summary>
     private static readonly FilePickerFileType AudioFileType = new("Audio files")
     {
         Patterns = ["*.mp3", "*.wav", "*.ogg", "*.flac", "*.m4a", "*.aac"],
+        MimeTypes = ["audio/*"],
+        AppleUniformTypeIdentifiers = ["public.audio"],
     };
 
     public PadConfigView()
@@ -40,6 +47,7 @@ public partial class PadConfigView : UserControl
             return;
         }
 
+        vm.TrackImport(imported.Path);
         vm.AudioFilePath = imported.Path;
         vm.AudioDisplayName = imported.Name;
     }
@@ -52,6 +60,7 @@ public partial class PadConfigView : UserControl
             return;
         }
 
+        vm.TrackImport(imported.Path);
         vm.IconPath = imported.Path;
         vm.IconDisplayName = imported.Name;
     }

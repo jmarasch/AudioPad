@@ -14,6 +14,12 @@ public partial class PageOverviewView : UserControl
     private static readonly FilePickerFileType ArchiveFileType = new("AudioPad export")
     {
         Patterns = ["*.audiopad"],
+
+        // Android's picker filters by MIME type and knows nothing about ".audiopad", so anything
+        // narrower than this leaves every file greyed out and the picker unusable. Desktop still
+        // filters properly on the pattern above.
+        MimeTypes = ["*/*"],
+        AppleUniformTypeIdentifiers = ["public.data"],
     };
 
     public PageOverviewView()
