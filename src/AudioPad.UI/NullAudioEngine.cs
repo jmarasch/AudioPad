@@ -34,6 +34,16 @@ public sealed class NullAudioEngine : IAudioEngine
     {
     }
 
+    public void Restart(Guid padId)
+    {
+    }
+
+    public void SetPaused(Guid padId, bool paused)
+    {
+    }
+
+    public PlaybackProgress? GetProgress(Guid padId) => null;
+
     public void Dispose()
     {
     }

@@ -9,6 +9,7 @@ namespace AudioPad.UI.ViewModels;
 public sealed class PageViewModel : ViewModelBase
 {
     private readonly IAudioEngine _audioEngine;
+    private readonly EditModeState _editMode;
     private readonly Action<PadViewModel> _onPadConfigRequested;
     private readonly Action _onChanged;
 
@@ -24,10 +25,16 @@ public sealed class PageViewModel : ViewModelBase
 
     public ObservableCollection<PadViewModel> Pads { get; }
 
-    public PageViewModel(Page page, IAudioEngine audioEngine, Action<PadViewModel> onPadConfigRequested, Action onChanged)
+    public PageViewModel(
+        Page page,
+        IAudioEngine audioEngine,
+        EditModeState editMode,
+        Action<PadViewModel> onPadConfigRequested,
+        Action onChanged)
     {
         Page = page;
         _audioEngine = audioEngine;
+        _editMode = editMode;
         _onPadConfigRequested = onPadConfigRequested;
         _onChanged = onChanged;
 
@@ -81,7 +88,7 @@ public sealed class PageViewModel : ViewModelBase
                 continue;
             }
 
-            pad = new PadViewModel(padConfig, _audioEngine);
+            pad = new PadViewModel(padConfig, Page, _audioEngine, _editMode);
             pad.ConfigRequested += _onPadConfigRequested;
             synced.Add(pad);
         }

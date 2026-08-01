@@ -16,6 +16,13 @@
     </Design.DataContext>
 
     <Panel>
+        <Panel.Styles>
+            <Style Selector="Button.editing">
+                <Setter Property="Background" Value="{DynamicResource EditModeBrush}" />
+                <Setter Property="Foreground" Value="Black" />
+            </Style>
+        </Panel.Styles>
+
         <!-- Pinch in to zoom out to the page overview, pinch out to come back — the gesture the
              zoomed-out/zoomed-in relationship already implies. Two-fingered, so it can't be
              confused with the Carousel's one-finger swipe or a pad's hold-drag. The recogniser is
@@ -24,6 +31,24 @@
         <Button Content="&lt;" HorizontalAlignment="Left" VerticalAlignment="Center" Command="{Binding PreviousPageCommand}" ZIndex="1" />
         <Button Content="&gt;" HorizontalAlignment="Right" VerticalAlignment="Center" Command="{Binding NextPageCommand}" ZIndex="1" />
         <Button Content="Pages" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,40,0" Command="{Binding OpenPageOverviewCommand}" ZIndex="1" />
+
+        <!-- Edit mode, opposite Pages. While it's on, a tap opens a pad's settings and a drag
+             rearranges the board — neither of which can then happen by accident mid-performance. -->
+        <Button Content="Edit"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="8,0,0,0"
+                Classes.editing="{Binding EditMode.IsEditing}"
+                Command="{Binding ToggleEditModeCommand}"
+                ZIndex="1" />
+
+        <!-- An unmistakable border while editing: mistaking the mode on stage means a tap opens a
+             dialog instead of firing a cue. -->
+        <Border BorderBrush="{DynamicResource EditModeBrush}"
+                BorderThickness="3"
+                IsHitTestVisible="False"
+                IsVisible="{Binding EditMode.IsEditing}"
+                ZIndex="1" />
 
         <!-- CarouselItems pads Pages with a clone of the last page at index 0 and a clone of the
              first page at the end. Swiping/advancing one step past either real end lands on a

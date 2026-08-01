@@ -16,6 +16,22 @@ public sealed class Page
 
     public List<PadConfig> Pads { get; set; } = new();
 
+    /// <summary>
+    /// The colours this page's pads use unless a pad overrides them. Pages saved before pad
+    /// colouring existed deserialize with these unset, which resolves to the built-in look.
+    /// </summary>
+    public PadPalette PadColors { get; set; } = new();
+
+    /// <summary>
+    /// Whether playing pads show the restart/pause controls and time readout.
+    ///
+    /// Purely the user's choice: whether the controls are comfortable at a given grid size depends
+    /// on the screen they're on, which the app is in no position to judge. A dense grid that's
+    /// unusable on a phone is fine on a desktop monitor, so a size threshold guessed here would
+    /// only take the option away from people it suits.
+    /// </summary>
+    public bool ShowPadControls { get; set; } = true;
+
     /// <summary>Builds a default page with one blank, unconfigured pad per grid cell.</summary>
     public static Page CreateDefault(string title = "Page 1", int rows = 4, int columns = 4)
     {

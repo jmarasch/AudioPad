@@ -5,30 +5,133 @@
              x:Class="AudioPad.UI.Controls.PadButton"
              x:DataType="vm:PadViewModel">
     <UserControl.Styles>
-        <Style Selector="Button.pad.lit">
-            <Setter Property="Background" Value="#FFC107" />
+        <!-- The pad's colour comes entirely from the view model, which picks one of four by
+             playing/hovered state. All three visual states are bound to that same value, because
+             the theme's own hover and pressed shades are a fixed dark grey — which is what turned
+             a *playing* pad dark the moment the pointer touched it, hiding the one piece of
+             feedback that matters while a clip is running. -->
+        <Style Selector="Button.pad /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding NormalBackground}" />
+            <Setter Property="Foreground" Value="{Binding NormalForeground}" />
+        </Style>
+        <Style Selector="Button.pad:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding HoverBackground}" />
+            <Setter Property="Foreground" Value="{Binding HoverForeground}" />
+        </Style>
+        <Style Selector="Button.pad:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding HoverBackground}" />
+            <Setter Property="Foreground" Value="{Binding HoverForeground}" />
+        </Style>
+
+        <!-- Each transport target is a full-height slice of the pad rather than a small button, so
+             hitting one mid-performance doesn't require aiming. -->
+        <Style Selector="Button.zone">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="Black" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.zone /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.zone:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#28000000" />
+        </Style>
+        <Style Selector="Button.zone:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#44000000" />
+        </Style>
+
+        <Style Selector="Border.readout">
+            <Setter Property="Background" Value="#33000000" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="6,3" />
         </Style>
     </UserControl.Styles>
 
-    <Button x:Name="RootButton"
-            Classes="pad"
-            Classes.lit="{Binding IsLit}"
-            Command="{Binding ToggleCommand}"
-            DoubleTapped="OnDoubleTapped"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Stretch"
-            MinWidth="96"
-            MinHeight="72">
-        <StackPanel Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Image Source="{Binding IconBitmap}"
-                   IsVisible="{Binding IconBitmap, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
-                   MaxHeight="32"
-                   MaxWidth="32"
-                   HorizontalAlignment="Center" />
-            <TextBlock Text="{Binding Label}"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center" />
-        </StackPanel>
-    </Button>
+    <!-- The transport sits in a sibling layer above the pad rather than inside its content. Nested
+         inside, a press on a control was also a press on the pad behind it, which stops playback —
+         so restart and pause appeared to do nothing. As a separate layer they take the press
+         outright, and the pad keeps its press-to-stop behaviour everywhere else.
+         The layer itself has no background, so taps between the controls still fall through. -->
+    <Panel>
+        <Button x:Name="RootButton"
+                Classes="pad"
+                Classes.lit="{Binding IsLit}"
+                Command="{Binding ActivateCommand}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                MinWidth="96"
+                MinHeight="72">
+            <StackPanel Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Image Source="{Binding IconBitmap}"
+                       IsVisible="{Binding IconBitmap, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                       MaxHeight="32"
+                       MaxWidth="32"
+                       HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding Label}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </Button>
+
+        <!-- Split into quarter / half / quarter: restart, stop, pause. Stop keeps the middle
+             because it's the one pressed most and the one you least want to miss; the outer
+             quarters are still a far larger target than the corner buttons they replaced. -->
+        <Grid IsVisible="{Binding ShowTransport}" ColumnDefinitions="1*,2*,1*" Margin="3">
+            <Button Grid.Column="0"
+                    Classes="zone"
+                    Content="&#x21BA;"
+                    ToolTip.Tip="Restart"
+                    Command="{Binding RestartCommand}" />
+
+            <Button Grid.Column="1"
+                    Classes="zone"
+                    ToolTip.Tip="Stop"
+                    Command="{Binding ActivateCommand}" />
+
+            <Button Grid.Column="2"
+                    Classes="zone"
+                    Content="{Binding PauseGlyph}"
+                    ToolTip.Tip="Pause / resume"
+                    Command="{Binding TogglePauseCommand}" />
+
+            <!-- Readouts sit above the zones but take no input, so they don't punch holes in the
+                 targets underneath them. -->
+            <Border Grid.Column="1"
+                    Classes="readout"
+                    IsHitTestVisible="False"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Path Fill="Black"
+                          VerticalAlignment="Center"
+                          Data="M0,5 L4,5 L9,0 L9,16 L4,11 L0,11 Z
+                                M11,4 A6,6 0 0 1 11,12
+                                M13,1 A9,9 0 0 1 13,15" />
+                    <TextBlock Text="{Binding VolumePercent}"
+                               Foreground="Black"
+                               FontSize="14"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Classes="readout"
+                    IsHitTestVisible="False"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom">
+                <TextBlock Text="{Binding TimeDisplay}"
+                           Foreground="Black"
+                           FontSize="14"
+                           FontFamily="monospace" />
+            </Border>
+        </Grid>
+    </Panel>
 </UserControl>

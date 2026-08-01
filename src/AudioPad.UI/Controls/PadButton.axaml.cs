@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Input;
 using AudioPad.UI.Interactions;
 using AudioPad.UI.ViewModels;
 
@@ -10,15 +9,13 @@ public partial class PadButton : UserControl
     public PadButton()
     {
         InitializeComponent();
-        _ = new HoldDragReorderBehavior<PadViewModel>(RootButton, OnDropped);
-    }
-
-    private void OnDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (DataContext is PadViewModel pad)
-        {
-            pad.OpenConfigCommand.Execute(null);
-        }
+        // In edit mode a press already means "arrange", so a drag needs no long press to be
+        // distinguishable from a tap. Outside edit mode a pad can't be dragged at all.
+        _ = new HoldDragReorderBehavior<PadViewModel>(
+            RootButton,
+            OnDropped,
+            canStart: () => (DataContext as PadViewModel)?.IsEditing == true,
+            requireHold: false);
     }
 
     /// <summary>

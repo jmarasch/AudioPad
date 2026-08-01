@@ -1,4 +1,6 @@
+using AudioPad.Core.Persistence;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using AudioPad.UI.ViewModels;
@@ -17,25 +19,51 @@ public partial class PadConfigView : UserControl
         InitializeComponent();
     }
 
-    private async void OnBrowseAudioClick(object? sender, RoutedEventArgs e)
+    /// <summary>
+    /// Treats a press on the dimmed area around the panel as Cancel. The check that the press
+    /// landed on the scrim itself, rather than on something inside the panel, is what stops an
+    /// ordinary click on a dropdown from closing the dialog.
+    /// </summary>
+    private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
     {
-        var path = await PickFilePathAsync("Choose an audio file", AudioFileType, "audio");
-        if (path is not null && DataContext is PadConfigViewModel vm)
+        if (ReferenceEquals(e.Source, sender) && DataContext is PadConfigViewModel viewModel)
         {
-            vm.AudioFilePath = path;
+            viewModel.CancelCommand.Execute(null);
         }
     }
 
-    private async void OnBrowseIconClick(object? sender, RoutedEventArgs e)
+    private async void OnImportAudioClick(object? sender, RoutedEventArgs e)
     {
-        var path = await PickFilePathAsync("Choose an icon image", FilePickerFileTypes.ImageAll, "icons");
-        if (path is not null && DataContext is PadConfigViewModel vm)
+        if (await ImportFileAsync("Import an audio file", AudioFileType, MediaLibrary.AudioFolder) is not { } imported
+            || DataContext is not PadConfigViewModel vm)
         {
-            vm.IconPath = path;
+            return;
         }
+
+        vm.AudioFilePath = imported.Path;
+        vm.AudioDisplayName = imported.Name;
     }
 
-    private async Task<string?> PickFilePathAsync(string title, FilePickerFileType fileType, string importSubfolder)
+    private async void OnImportIconClick(object? sender, RoutedEventArgs e)
+    {
+        if (await ImportFileAsync("Import an icon image", FilePickerFileTypes.ImageAll, MediaLibrary.IconFolder) is not { } imported
+            || DataContext is not PadConfigViewModel vm)
+        {
+            return;
+        }
+
+        vm.IconPath = imported.Path;
+        vm.IconDisplayName = imported.Name;
+    }
+
+    /// <summary>
+    /// Copies the chosen file into the app's media library and returns its new path.
+    ///
+    /// Always a copy, on every platform. Referencing the original only ever worked on desktop —
+    /// Android hands back a content:// URI with no usable path — and left desktop boards silently
+    /// dependent on folders the user is free to reorganise.
+    /// </summary>
+    private async Task<(string Path, string Name)?> ImportFileAsync(string title, FilePickerFileType fileType, string subfolder)
     {
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel is null)
@@ -55,26 +83,7 @@ public partial class PadConfigView : UserControl
             return null;
         }
 
-        var file = files[0];
-
-        // A real filesystem path (typical on Desktop) can be used as-is. Anything else — e.g. an
-        // Android `content://` URI from the Storage Access Framework — isn't something native
-        // playback code can open directly, so import a copy into app-private storage instead.
-        return file.Path.IsFile ? file.Path.LocalPath : await ImportFileAsync(file, importSubfolder);
-    }
-
-    private static async Task<string> ImportFileAsync(IStorageFile file, string subfolder)
-    {
-        var importDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AudioPad", subfolder);
-        Directory.CreateDirectory(importDir);
-
-        var destinationPath = Path.Combine(importDir, $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}");
-
-        await using var source = await file.OpenReadAsync();
-        await using var destination = File.Create(destinationPath);
-        await source.CopyToAsync(destination);
-
-        return destinationPath;
+        await using var source = await files[0].OpenReadAsync();
+        return (await MediaLibrary.ImportAsync(source, files[0].Name, subfolder), files[0].Name);
     }
 }

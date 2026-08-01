@@ -3,14 +3,38 @@
              xmlns:vm="using:AudioPad.UI.ViewModels"
              x:Class="AudioPad.UI.Views.PageConfigView"
              x:DataType="vm:PageConfigViewModel">
-    <Border Background="{DynamicResource OverlayScrimBrush}">
-        <Border Background="{DynamicResource OverlayPanelBrush}"
+    <UserControl.Resources>
+        <DataTemplate x:Key="ColorChoiceTemplate" DataType="vm:PadColorChoice">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Border Background="{Binding Swatch}"
+                        BorderBrush="#66808080"
+                        BorderThickness="1"
+                        Width="20"
+                        Height="20"
+                        CornerRadius="4" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Pressing the dimmed area outside the panel cancels, the same as pressing Cancel. -->
+    <Border Background="{DynamicResource OverlayScrimBrush}" PointerPressed="OnScrimPressed">
+        <!-- Sized as a share of the window rather than a fixed 360px: the same dialog serves a
+             desktop monitor and a tablet, and a fixed width is cramped on one and lost on the
+             other. The 1*/6*/1* split makes the panel 75% of the width, 80% of the height. -->
+        <Grid ColumnDefinitions="1*,6*,1*" RowDefinitions="1*,8*,1*">
+        <Border Grid.Column="1"
+                Grid.Row="1"
+                Background="{DynamicResource OverlayPanelBrush}"
                 CornerRadius="8"
                 Padding="24"
-                Width="360"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <StackPanel Spacing="12">
+                MaxWidth="720"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <!-- Right margin reserves room for the scrollbar, which is drawn over the content
+                 rather than beside it — see the matching note in PadConfigView. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12" Margin="0,0,14,0">
                 <TextBlock Text="Page Settings" FontSize="18" FontWeight="Bold" />
 
                 <TextBlock Text="Title" />
@@ -50,11 +74,57 @@
                            Foreground="{DynamicResource OverlayWarningBrush}"
                            TextWrapping="Wrap" />
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <!-- Advice, not a restriction: whether the zones are comfortable at this density
+                     depends on the screen, which only the user can judge. -->
+                <TextBlock Text="At this grid size the on-pad controls may be fiddly on a small screen. They work fine on a larger one — this is only a heads-up."
+                           IsVisible="{Binding IsGridTightForControls}"
+                           Foreground="{DynamicResource OverlayWarningBrush}"
+                           TextWrapping="Wrap" />
+
+                <CheckBox IsChecked="{Binding ShowPadControls}"
+                          Content="Show restart / stop / pause on playing pads" />
+
+                <!-- The defaults every pad on this page follows unless it overrides one of them
+                     in its own settings. -->
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                    <TextBlock Grid.Column="0" Text="Default pad colors" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="Reset"
+                            ToolTip.Tip="Back to the built-in colors"
+                            Command="{Binding ResetPadColorsCommand}" />
+                </Grid>
+
+                <TextBlock Text="Idle" />
+                <ComboBox ItemsSource="{Binding PadInactiveChoices}"
+                          SelectedItem="{Binding PadInactiveColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Idle — hovered" />
+                <ComboBox ItemsSource="{Binding PadInactiveHoverChoices}"
+                          SelectedItem="{Binding PadInactiveHoverColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Playing" />
+                <ComboBox ItemsSource="{Binding PadActiveChoices}"
+                          SelectedItem="{Binding PadActiveColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Playing — hovered" />
+                <ComboBox ItemsSource="{Binding PadActiveHoverChoices}"
+                          SelectedItem="{Binding PadActiveHoverColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
                     <Button Content="Cancel" Command="{Binding CancelCommand}" />
                     <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
                 </StackPanel>
             </StackPanel>
+            </ScrollViewer>
         </Border>
+        </Grid>
     </Border>
 </UserControl>

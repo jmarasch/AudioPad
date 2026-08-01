@@ -3,35 +3,78 @@
              xmlns:vm="using:AudioPad.UI.ViewModels"
              x:Class="AudioPad.UI.Views.PadConfigView"
              x:DataType="vm:PadConfigViewModel">
-    <Border Background="{DynamicResource OverlayScrimBrush}">
-        <Border Background="{DynamicResource OverlayPanelBrush}"
+    <UserControl.Styles>
+        <!-- Clear wipes the pad and closes straight away, so it's coloured as the destructive
+             action rather than sitting there looking like Cancel. -->
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="#C62828" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#B71C1C" />
+            <Setter Property="TextElement.Foreground" Value="White" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- Shared by all four pickers: a swatch plus the value, so a colour is chosen by eye
+             rather than by reading hex. -->
+        <DataTemplate x:Key="ColorChoiceTemplate" DataType="vm:PadColorChoice">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Border Background="{Binding Swatch}"
+                        BorderBrush="#66808080"
+                        BorderThickness="1"
+                        Width="20"
+                        Height="20"
+                        CornerRadius="4" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Pressing the dimmed area outside the panel cancels, the same as pressing Cancel. -->
+    <Border Background="{DynamicResource OverlayScrimBrush}" PointerPressed="OnScrimPressed">
+        <!-- Sized as a share of the window rather than a fixed 360px: the same dialog serves a
+             desktop monitor and a tablet, and a fixed width is cramped on one and lost on the
+             other. The 1*/6*/1* split makes the panel 75% of the width, 80% of the height. -->
+        <Grid ColumnDefinitions="1*,6*,1*" RowDefinitions="1*,8*,1*">
+        <Border Grid.Column="1"
+                Grid.Row="1"
+                Background="{DynamicResource OverlayPanelBrush}"
                 CornerRadius="8"
                 Padding="24"
-                Width="360"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <StackPanel Spacing="12">
+                MaxWidth="720"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <!-- Scrolls because the colour pickers push this past the height of a phone or a
+                 tablet in landscape. The right margin reserves the scrollbar's width: it is drawn
+                 over the content rather than beside it, so without this it sits on top of the
+                 dropdowns' arrows and the end of the volume slider. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12" Margin="0,0,14,0">
                 <TextBlock Text="Configure Pad" FontSize="18" FontWeight="Bold" />
 
                 <TextBlock Text="Label" />
                 <TextBox Text="{Binding Label}" />
 
+                <!-- "Import", not "Browse": the file is copied into the app's library, so what's
+                     shown afterwards is its name rather than wherever it happened to come from. -->
                 <TextBlock Text="Audio file" />
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0"
-                               Text="{Binding AudioFilePath, TargetNullValue='No file selected'}"
+                               Text="{Binding AudioFileName}"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Content="Browse…" Click="OnBrowseAudioClick" />
+                    <Button Grid.Column="1" Content="Import…" Click="OnImportAudioClick" />
                 </Grid>
 
                 <TextBlock Text="Icon (optional)" />
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0"
-                               Text="{Binding IconPath, TargetNullValue='No icon selected'}"
+                               Text="{Binding IconFileName}"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Content="Browse…" Click="OnBrowseIconClick" />
+                    <Button Grid.Column="1" Content="Import…" Click="OnImportIconClick" />
                 </Grid>
 
                 <TextBlock Text="Playback mode" />
@@ -40,11 +83,47 @@
                 <TextBlock Text="{Binding Volume, StringFormat='Volume: {0:P0}'}" />
                 <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" />
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
-                    <Button Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
-                </StackPanel>
+                <!-- Each colour falls back to the page on its own, so overriding the playing colour
+                     alone doesn't drag the other three along with it. -->
+                <TextBlock Text="Colors" FontWeight="Bold" Margin="0,4,0,0" />
+
+                <TextBlock Text="Idle" />
+                <ComboBox ItemsSource="{Binding InactiveChoices}"
+                          SelectedItem="{Binding InactiveColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Idle — hovered" />
+                <ComboBox ItemsSource="{Binding InactiveHoverChoices}"
+                          SelectedItem="{Binding InactiveHoverColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Playing" />
+                <ComboBox ItemsSource="{Binding ActiveChoices}"
+                          SelectedItem="{Binding ActiveColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Playing — hovered" />
+                <ComboBox ItemsSource="{Binding ActiveHoverChoices}"
+                          SelectedItem="{Binding ActiveHoverColor}"
+                          ItemTemplate="{StaticResource ColorChoiceTemplate}"
+                          HorizontalAlignment="Stretch" />
+
+                <!-- Clear is set apart from Cancel/Save because it acts immediately. -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,8,0,0">
+                    <Button Grid.Column="0"
+                            Content="Clear"
+                            Classes="danger"
+                            ToolTip.Tip="Empties this pad and closes"
+                            Command="{Binding ClearCommand}" />
+                    <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0" />
+                    <Button Grid.Column="3" Content="Save" Command="{Binding SaveCommand}" Classes="accent" />
+                </Grid>
             </StackPanel>
+            </ScrollViewer>
         </Border>
+        </Grid>
     </Border>
 </UserControl>

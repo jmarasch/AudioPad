@@ -20,6 +20,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<PageViewModel> Pages { get; }
 
     /// <summary>
+    /// Whether the board is being arranged rather than played. Shared with every pad, so a tap
+    /// means "edit this" instead of "play this" while it's on.
+    /// </summary>
+    public EditModeState EditMode { get; } = new();
+
+    /// <summary>
     /// <see cref="Pages"/> padded with a clone of the last page at index 0 and a clone of the
     /// first page at the end, so the Carousel can be swiped/advanced one step past either real
     /// end and then be silently snapped back to the corresponding real page — the illusion of a
@@ -74,6 +80,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _setupRepository = setupRepository;
         _setupPath = setupPath;
 
+        // Pull any clip still living in the user's own folders into the app's library, so the board
+        // stops depending on paths outside it. Backed up first: this rewrites every such path, and
+        // the previous file is the only way back if it goes wrong.
+        if (MediaLibrary.AdoptAll(setup))
+        {
+            BackUpCurrentSetup();
+            PersistSetup();
+        }
+
         Pages = new ObservableCollection<PageViewModel>();
         foreach (var page in setup.Pages)
         {
@@ -122,6 +137,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void OpenPageOverview() => IsPageOverviewOpen = true;
 
+    /// <summary>Switches between playing the board and arranging it.</summary>
+    [RelayCommand]
+    private void ToggleEditMode() => EditMode.IsEditing = !EditMode.IsEditing;
+
     [RelayCommand]
     private void CloseOverview()
     {
@@ -164,6 +183,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         var index = Pages.IndexOf(page);
+
+        // The page's clips and icons become unreachable with it, so they go too. Only files the
+        // library owns are ever touched — a pad still pointing at an original somewhere in the
+        // user's own folders is left alone. See MediaLibrary.Delete.
+        foreach (var pad in _setup.Pages[index].Pads)
+        {
+            MediaLibrary.Delete(pad.AudioFilePath);
+            MediaLibrary.Delete(pad.IconPath);
+        }
+
+        page.Detach();
         Pages.RemoveAt(index);
         _setup.Pages.RemoveAt(index);
         SelectedOverviewPage = null;
@@ -387,7 +417,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private static string DescribePageCount(int count) => count == 1 ? "1 page" : $"{count} pages";
 
-    private PageViewModel CreatePageViewModel(Page page) => new(page, _audioEngine, OnPadConfigRequested, PersistSetup);
+    private PageViewModel CreatePageViewModel(Page page) => new(page, _audioEngine, EditMode, OnPadConfigRequested, PersistSetup);
 
     private void OnPadConfigRequested(PadViewModel pad)
     {

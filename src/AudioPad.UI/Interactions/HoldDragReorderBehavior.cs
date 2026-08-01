@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 
@@ -38,8 +39,25 @@ public sealed class HoldDragReorderBehavior<TItem>
     /// <summary>Marks drop lines in the shared overlay layer so leftovers can be identified.</summary>
     private const string IndicatorTag = "AudioPadDropIndicator";
 
+    /// <summary>How far the pointer must move before a press becomes a drag rather than a tap.</summary>
+    private const double DragThreshold = 8;
+
     private readonly InputElement _item;
     private readonly Action<object?, TItem, int> _onDropped;
+
+    /// <summary>Whether a drag may start at all right now — false outside edit mode, for pads.</summary>
+    private readonly Func<bool> _canStart;
+
+    /// <summary>
+    /// Whether a drag has to be preceded by a long press. Pads don't: in edit mode a press already
+    /// means "arrange", so waiting for a timer only makes the gesture ambiguous and slow. Page
+    /// tiles still do, because their list scrolls in the same direction they reorder, and an
+    /// immediate drag would leave no way to scroll it.
+    /// </summary>
+    private readonly bool _requireHold;
+
+    /// <summary>Set on press while a drag is still possible but hasn't passed the threshold.</summary>
+    private bool _dragPending;
 
     private TopLevel? _topLevel;
     private ItemsControl? _owner;
@@ -86,19 +104,84 @@ public sealed class HoldDragReorderBehavior<TItem>
     /// Applies the whole reorder, once, when the finger lifts: the item and the index it should end
     /// up at. Saving belongs here too — there is exactly one of these per drag.
     /// </param>
-    public HoldDragReorderBehavior(InputElement item, Action<object?, TItem, int> onDropped)
+    /// <param name="canStart">Whether a drag is allowed to begin right now.</param>
+    /// <param name="requireHold">See <see cref="_requireHold"/>.</param>
+    public HoldDragReorderBehavior(
+        InputElement item,
+        Action<object?, TItem, int> onDropped,
+        Func<bool>? canStart = null,
+        bool requireHold = true)
     {
         _item = item;
         _onDropped = onDropped;
+        _canStart = canStart ?? (static () => true);
+        _requireHold = requireHold;
 
-        InputElement.SetIsHoldingEnabled(item, true);
-        InputElement.SetIsHoldWithMouseEnabled(item, true);
+        if (requireHold)
+        {
+            InputElement.SetIsHoldingEnabled(item, true);
+            InputElement.SetIsHoldWithMouseEnabled(item, true);
+            item.Holding += OnHolding;
+        }
 
         // Registered with handledEventsToo: true because Button marks its own PointerPressed
         // handling as Handled (for its Click/pressed-state bookkeeping), which would otherwise
         // stop a plain `+=` subscription from ever firing.
         item.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, handledEventsToo: true);
-        item.Holding += OnHolding;
+        item.AddHandler(InputElement.PointerMovedEvent, OnItemPointerMoved, handledEventsToo: true);
+
+        // Tunnel, so it runs before the Button's own release handling. A Button raises Click on
+        // release regardless of how far the pointer travelled in between, so without this the end
+        // of a drag also counted as a tap — and dropping a pad opened its settings.
+        item.AddHandler(
+            InputElement.PointerReleasedEvent,
+            OnItemPointerReleasedPreview,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+    }
+
+    private void OnItemPointerReleasedPreview(object? sender, PointerReleasedEventArgs e)
+    {
+        // Any release ends the possibility of this press becoming a drag. Without this the flag
+        // outlived the gesture: the press that opened a pad's settings left it set, and simply
+        // moving the mouse back over that pad afterwards started a drag with no button held.
+        _dragPending = false;
+
+        if (_dragged is not null && e.Pointer.Id == _dragPointerId)
+        {
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Turns a press into a drag once it has travelled far enough to not be a tap. Only used when
+    /// no long press is required — the threshold is what separates "arrange this" from "open this".
+    /// </summary>
+    private void OnItemPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_requireHold || !_dragPending || _dragged is not null || _topLevel is null)
+        {
+            return;
+        }
+
+        // Belt and braces against the same stuck-flag class of bug: a drag can only continue from
+        // the pointer that started it, and only while that pointer is still down. A release
+        // delivered somewhere this control never sees would otherwise leave the flag set.
+        if (e.Pointer.Id != _pressedPointerId || !e.GetCurrentPoint(_item).Properties.IsLeftButtonPressed)
+        {
+            _dragPending = false;
+            return;
+        }
+
+        var point = e.GetPosition(_topLevel);
+        if (Math.Abs(point.X - _pressedPoint.X) < DragThreshold
+            && Math.Abs(point.Y - _pressedPoint.Y) < DragThreshold)
+        {
+            return;
+        }
+
+        _dragPending = false;
+        BeginDrag();
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -120,11 +203,21 @@ public sealed class HoldDragReorderBehavior<TItem>
         _pressedPointer = e.Pointer;
         _pressedPointerId = e.Pointer.Id;
         _pressedPoint = _topLevel is null ? default : e.GetPosition(_topLevel);
+        _dragPending = _canStart();
     }
 
     private void OnHolding(object? sender, HoldingRoutedEventArgs e)
     {
-        if (e.HoldingState != HoldingState.Started || _topLevel is null || _item.DataContext is not TItem item)
+        if (e.HoldingState == HoldingState.Started && _canStart())
+        {
+            BeginDrag();
+            e.Handled = true;
+        }
+    }
+
+    private void BeginDrag()
+    {
+        if (_topLevel is null || _item.DataContext is not TItem item)
         {
             return;
         }
@@ -161,7 +254,6 @@ public sealed class HoldDragReorderBehavior<TItem>
         SuppressCarouselSwipe();
         SuppressAncestorScrolling();
         LiftDraggedItem();
-        e.Handled = true;
     }
 
     /// <summary>Marks the container as picked up: shrunk, faded, above its neighbours, and free to
@@ -275,6 +367,7 @@ public sealed class HoldDragReorderBehavior<TItem>
 
         _dragged = null;
         _dragPointerId = null;
+        _dragPending = false;
 
         GestureLog.Write($"drag end apply={applyDrop} from={_sourceIndex} slot={_insertSlot} to={destination}");
 

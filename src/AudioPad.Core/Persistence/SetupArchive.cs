@@ -184,12 +184,10 @@ public static class SetupArchive
             return null;
         }
 
-        var destinationPath = Path.Combine(AppStorage.GetDirectory(subfolder), $"{Guid.NewGuid()}{Path.GetExtension(entry.Name)}");
-        await using (var entryStream = entry.Open())
-        await using (var destinationStream = File.Create(destinationPath))
-        {
-            await entryStream.CopyToAsync(destinationStream);
-        }
+        // Keeps the clip's own name rather than renaming it to a GUID, so what lands in the media
+        // library is still recognisable as the file that was originally chosen.
+        await using var entryStream = entry.Open();
+        var destinationPath = await MediaLibrary.ImportAsync(entryStream, entry.Name, subfolder);
 
         resolved[entryPath] = destinationPath;
         return destinationPath;
