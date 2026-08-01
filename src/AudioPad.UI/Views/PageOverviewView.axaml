@@ -11,23 +11,43 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid Background="{DynamicResource OverviewBackgroundBrush}" RowDefinitions="Auto,*">
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
-            <Button Grid.Column="0"
-                    Content="{Binding DeleteButtonText}"
-                    Classes.armed="{Binding IsDeleteArmed}"
-                    Command="{Binding DeleteSelectedPageCommand}"
-                    IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-            <Button Grid.Column="1"
-                    Content="Settings"
-                    Margin="8,0,0,0"
-                    Command="{Binding ConfigureSelectedPageCommand}"
-                    IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
-            <Button Grid.Column="3" Content="+ Add Page" Command="{Binding AddPageCommand}" Margin="0,0,8,0" />
-            <Button Grid.Column="4" Content="Close" Command="{Binding CloseOverviewCommand}" />
+    <Grid Background="{DynamicResource OverviewBackgroundBrush}" RowDefinitions="Auto,Auto,*">
+        <!-- Both groups wrap, because seven buttons don't fit across a phone-width window and the
+             overview is the same view on every platform. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="12">
+            <WrapPanel Grid.Column="0">
+                <Button Content="{Binding DeleteButtonText}"
+                        Classes.armed="{Binding IsDeleteArmed}"
+                        Command="{Binding DeleteSelectedPageCommand}"
+                        IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                <Button Content="Settings"
+                        Margin="8,0,0,0"
+                        Command="{Binding ConfigureSelectedPageCommand}"
+                        IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                <Button Content="Export page"
+                        Margin="8,0,0,0"
+                        Click="OnExportPageClick"
+                        IsEnabled="{Binding SelectedOverviewPage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+            </WrapPanel>
+
+            <WrapPanel Grid.Column="1">
+                <Button Content="Import…" Click="OnImportClick" Margin="8,0,0,0" />
+                <Button Content="Export all" Click="OnExportSetupClick" Margin="8,0,0,0" />
+                <Button Content="+ Add Page" Command="{Binding AddPageCommand}" Margin="8,0,0,0" />
+                <Button Content="Close" Command="{Binding CloseOverviewCommand}" Margin="8,0,0,0" />
+            </WrapPanel>
         </Grid>
 
-        <ListBox Grid.Row="1"
+        <!-- Import can fail for reasons only the chosen file knows about, so the outcome is always
+             stated rather than left to be inferred from whether the list changed. -->
+        <TextBlock Grid.Row="1"
+                   Text="{Binding ArchiveStatus}"
+                   IsVisible="{Binding ArchiveStatus, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                   Foreground="{DynamicResource OverlayWarningBrush}"
+                   TextWrapping="Wrap"
+                   Margin="12,0,12,8" />
+
+        <ListBox Grid.Row="2"
                  ItemsSource="{Binding Pages}"
                  SelectedItem="{Binding SelectedOverviewPage}"
                  Margin="12">

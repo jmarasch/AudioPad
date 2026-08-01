@@ -41,25 +41,64 @@ public static class SetupArchive
         await WriteJsonEntryAsync(zip, SetupEntryName, exportable);
     }
 
-    public static async Task<Page> ImportPageAsync(Stream source)
+    /// <summary>
+    /// Imports an archive of either kind, reporting which one it held. This is what the UI calls:
+    /// the user picks a file, not a file <em>type</em>, so what it contains has to be discovered
+    /// rather than assumed.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The stream isn't an AudioPad archive.</exception>
+    public static async Task<ArchiveContents> ImportAsync(Stream source)
     {
-        using var zip = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
-        var page = await ReadJsonEntryAsync<Page>(zip, PageEntryName);
-        await ResolveMediaAsync(zip, page.Pads, new Dictionary<string, string>());
-        return page;
-    }
-
-    public static async Task<Setup> ImportSetupAsync(Stream source)
-    {
-        using var zip = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
-        var setup = await ReadJsonEntryAsync<Setup>(zip, SetupEntryName);
-        var resolved = new Dictionary<string, string>();
-        foreach (var page in setup.Pages)
+        // Reading a zip requires seeking, and a stream handed back by Android's Storage Access
+        // Framework generally can't, so it's buffered first. Exports don't need this: writing a
+        // zip only appends.
+        if (source.CanSeek)
         {
-            await ResolveMediaAsync(zip, page.Pads, resolved);
+            return await ReadContentsAsync(source);
         }
 
-        return setup;
+        await using var buffered = new MemoryStream();
+        await source.CopyToAsync(buffered);
+        buffered.Position = 0;
+        return await ReadContentsAsync(buffered);
+    }
+
+    /// <summary>Imports an archive expected to hold a single page.</summary>
+    /// <exception cref="InvalidDataException">The archive held a whole setup instead.</exception>
+    public static async Task<Page> ImportPageAsync(Stream source) =>
+        (await ImportAsync(source)).Page
+        ?? throw new InvalidDataException("This archive holds a whole setup, not a single page.");
+
+    /// <summary>Imports an archive expected to hold a whole setup.</summary>
+    /// <exception cref="InvalidDataException">The archive held a single page instead.</exception>
+    public static async Task<Setup> ImportSetupAsync(Stream source) =>
+        (await ImportAsync(source)).Setup
+        ?? throw new InvalidDataException("This archive holds a single page, not a whole setup.");
+
+    private static async Task<ArchiveContents> ReadContentsAsync(Stream source)
+    {
+        using var zip = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
+
+        if (zip.GetEntry(SetupEntryName) is not null)
+        {
+            var setup = await ReadJsonEntryAsync<Setup>(zip, SetupEntryName);
+            var resolved = new Dictionary<string, string>();
+            foreach (var page in setup.Pages)
+            {
+                await ResolveMediaAsync(zip, page.Pads, resolved);
+            }
+
+            return new ArchiveContents(null, setup);
+        }
+
+        if (zip.GetEntry(PageEntryName) is not null)
+        {
+            var page = await ReadJsonEntryAsync<Page>(zip, PageEntryName);
+            await ResolveMediaAsync(zip, page.Pads, new Dictionary<string, string>());
+            return new ArchiveContents(page, null);
+        }
+
+        throw new InvalidDataException("This file isn't an AudioPad export — it holds no page or setup.");
     }
 
     private static async Task BundleMediaAsync(ZipArchive zip, List<PadConfig> pads, Dictionary<string, string> mediaNames)

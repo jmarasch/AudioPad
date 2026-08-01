@@ -10,7 +10,7 @@ public partial class PageTile : UserControl
     public PageTile()
     {
         InitializeComponent();
-        _ = new HoldDragReorderBehavior<PageViewModel>(RootBorder, OnMoveRequested);
+        _ = new HoldDragReorderBehavior<PageViewModel>(RootBorder, OnDropped);
     }
 
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
@@ -26,8 +26,8 @@ public partial class PageTile : UserControl
     /// The owning view model is supplied by the drag behaviour, captured when the drag began —
     /// see the matching note in <see cref="PadButton"/> for why it can't be resolved mid-drag.
     /// </summary>
-    private void OnMoveRequested(object? owner, PageViewModel source, PageViewModel target)
+    private void OnDropped(object? owner, PageViewModel page, int index)
     {
-        (owner as MainWindowViewModel)?.MovePage(source, target);
+        (owner as MainWindowViewModel)?.MovePage(page, index);
     }
 }

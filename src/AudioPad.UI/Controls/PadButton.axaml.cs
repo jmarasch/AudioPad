@@ -10,7 +10,7 @@ public partial class PadButton : UserControl
     public PadButton()
     {
         InitializeComponent();
-        _ = new HoldDragReorderBehavior<PadViewModel>(RootButton, OnMoveRequested);
+        _ = new HoldDragReorderBehavior<PadViewModel>(RootButton, OnDropped);
     }
 
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
@@ -26,8 +26,8 @@ public partial class PadButton : UserControl
     /// be looked up from this control mid-drag: reordering recycles containers and detaches it
     /// from the visual tree, so the lookup would return null after the first move.
     /// </summary>
-    private void OnMoveRequested(object? owner, PadViewModel source, PadViewModel target)
+    private void OnDropped(object? owner, PadViewModel pad, int index)
     {
-        (owner as PageViewModel)?.MovePad(source, target);
+        (owner as PageViewModel)?.MovePad(pad, index);
     }
 }

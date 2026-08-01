@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AudioPad.Core.Models;
+using AudioPad.UI.Interactions;
 using AudioPad.Core.Persistence;
 using AudioPad.Core.Playback;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -53,6 +54,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isDeleteArmed;
 
+    /// <summary>
+    /// What the last import or export did, shown in the overview. Import in particular can fail for
+    /// reasons only the file knows about (wrong file picked, truncated copy), and silently doing
+    /// nothing would be indistinguishable from success.
+    /// </summary>
+    [ObservableProperty]
+    private string? _archiveStatus;
+
     public MainWindowViewModel()
         : this(Setup.CreateDefault(), new NullAudioEngine(), new SetupRepository(), SetupRepository.GetDefaultSetupPath())
     {
@@ -87,10 +96,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public int ResolveSentinelIndex(int carouselIndex) => carouselIndex == 0 ? CarouselItems.Count - 2 : 1;
 
     [RelayCommand]
-    private void NextPage() => SelectedCarouselIndex = Math.Min(SelectedCarouselIndex + 1, CarouselItems.Count - 1);
+    private void NextPage()
+    {
+        SelectedCarouselIndex = Math.Min(SelectedCarouselIndex + 1, CarouselItems.Count - 1);
+        GestureLog.Write($"next page -> {SelectedCarouselIndex} of {CarouselItems.Count}");
+    }
 
     [RelayCommand]
-    private void PreviousPage() => SelectedCarouselIndex = Math.Max(SelectedCarouselIndex - 1, 0);
+    private void PreviousPage()
+    {
+        SelectedCarouselIndex = Math.Max(SelectedCarouselIndex - 1, 0);
+        GestureLog.Write($"previous page -> {SelectedCarouselIndex} of {CarouselItems.Count}");
+    }
 
     [RelayCommand]
     private void AddPage()
@@ -110,6 +127,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         IsPageOverviewOpen = false;
         SelectedOverviewPage = null;
+
+        // The import/export status describes the visit that's ending, so it shouldn't be waiting
+        // there, stale, the next time the overview is opened.
+        ArchiveStatus = null;
     }
 
     /// <summary>Closes the overview and jumps the carousel straight to the given page — a quick
@@ -125,6 +146,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         CloseOverview();
         SelectedCarouselIndex = index + 1;
+        GestureLog.Write($"navigate to page {index} -> carousel {SelectedCarouselIndex} of {CarouselItems.Count}");
     }
 
     [RelayCommand]
@@ -176,22 +198,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnIsDeleteArmedChanged(bool value) => OnPropertyChanged(nameof(DeleteButtonText));
 
-    /// <summary>Moves a page into another's position, shifting the pages between them along —
-    /// the same list-reorder semantics as <see cref="PageViewModel.MovePad"/>.</summary>
-    public void MovePage(PageViewModel source, PageViewModel target)
+    /// <summary>Moves a page to a new index, shifting the pages between along — the same
+    /// list-reorder semantics as <see cref="PageViewModel.MovePad"/>. Called once per drag, when
+    /// the finger lifts.</summary>
+    public void MovePage(PageViewModel page, int index)
     {
-        var from = Pages.IndexOf(source);
-        var to = Pages.IndexOf(target);
-        if (from < 0 || to < 0 || from == to)
+        var from = Pages.IndexOf(page);
+        var to = Math.Clamp(index, 0, Pages.Count - 1);
+        if (from < 0 || from == to)
         {
             return;
         }
 
         Pages.Move(from, to);
 
-        var page = _setup.Pages[from];
+        var moved = _setup.Pages[from];
         _setup.Pages.RemoveAt(from);
-        _setup.Pages.Insert(to, page);
+        _setup.Pages.Insert(to, moved);
 
         MirrorReorderIntoCarousel(from, to);
         PersistSetup();
@@ -248,6 +271,121 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var realIndex = selectedPage is null ? -1 : Pages.IndexOf(selectedPage);
         SelectedCarouselIndex = realIndex >= 0 ? realIndex + 1 : 1;
     }
+
+    /// <summary>Writes the whole setup — every page, with copies of all its audio and icons — to a
+    /// portable archive. This is the desktop half of "build it here, run it on the tablet".</summary>
+    public async Task ExportSetupAsync(Stream destination)
+    {
+        try
+        {
+            await SetupArchive.ExportSetupAsync(destination, _setup);
+            ArchiveStatus = $"Exported {DescribePageCount(Pages.Count)}.";
+        }
+        catch (Exception exception)
+        {
+            ArchiveStatus = $"Export failed: {exception.Message}";
+        }
+    }
+
+    /// <summary>Writes one page, with copies of its media, to a portable archive.</summary>
+    public async Task ExportPageAsync(Stream destination, PageViewModel page)
+    {
+        try
+        {
+            await SetupArchive.ExportPageAsync(destination, page.Page);
+            ArchiveStatus = $"Exported \"{page.Title}\".";
+        }
+        catch (Exception exception)
+        {
+            ArchiveStatus = $"Export failed: {exception.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Imports an archive of either kind. A single page is added to the end of the current setup; a
+    /// whole setup replaces it, since that archive describes the entire board rather than a part
+    /// of it. The replaced setup is backed up first.
+    /// </summary>
+    public async Task ImportArchiveAsync(Stream source)
+    {
+        try
+        {
+            var contents = await SetupArchive.ImportAsync(source);
+
+            if (contents.Setup is { } setup)
+            {
+                ReplaceSetup(setup);
+            }
+            else if (contents.Page is { } page)
+            {
+                AppendImportedPage(page);
+            }
+        }
+        catch (Exception exception)
+        {
+            ArchiveStatus = $"Import failed: {exception.Message}";
+        }
+    }
+
+    private void ReplaceSetup(Setup imported)
+    {
+        if (imported.Pages.Count == 0)
+        {
+            ArchiveStatus = "That archive has no pages in it — nothing was changed.";
+            return;
+        }
+
+        BackUpCurrentSetup();
+
+        foreach (var page in Pages)
+        {
+            page.Detach();
+        }
+
+        _setup.Pages.Clear();
+        _setup.Pages.AddRange(imported.Pages);
+
+        Pages.Clear();
+        foreach (var page in _setup.Pages)
+        {
+            Pages.Add(CreatePageViewModel(page));
+        }
+
+        SelectedOverviewPage = null;
+        RebuildCarouselItems();
+        PersistSetup();
+        ArchiveStatus = $"Imported {DescribePageCount(Pages.Count)}, replacing the previous setup.";
+    }
+
+    private void AppendImportedPage(Page page)
+    {
+        _setup.Pages.Add(page);
+        Pages.Add(CreatePageViewModel(page));
+        RebuildCarouselItems();
+        PersistSetup();
+        ArchiveStatus = $"Added \"{page.Title}\" to the end.";
+    }
+
+    /// <summary>
+    /// Keeps a timestamped copy of the setup an import is about to overwrite. Importing the wrong
+    /// file would otherwise destroy a board with no way back, and a failed backup must not stop the
+    /// import the user actually asked for.
+    /// </summary>
+    private void BackUpCurrentSetup()
+    {
+        try
+        {
+            var backupPath = Path.Combine(
+                AppStorage.GetDirectory("backups"), $"setup-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+            _setupRepository.SaveSetup(backupPath, _setup);
+        }
+        catch (Exception)
+        {
+            // Best effort only — see above.
+        }
+    }
+
+    private static string DescribePageCount(int count) => count == 1 ? "1 page" : $"{count} pages";
 
     private PageViewModel CreatePageViewModel(Page page) => new(page, _audioEngine, OnPadConfigRequested, PersistSetup);
 

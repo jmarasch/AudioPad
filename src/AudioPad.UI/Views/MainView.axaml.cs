@@ -1,3 +1,4 @@
+using AudioPad.UI.Interactions;
 using AudioPad.UI.ViewModels;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,17 +18,8 @@ public partial class MainView : UserControl
     private const double PinchOutThreshold = 1.35;
 
     /// <summary>
-    /// Live touch points, so a two-finger pinch can be measured directly. Avalonia's own pinch
-    /// gesture type isn't accessible from application code in this version, and tracking the two
-    /// pointers is simple enough that adopting it isn't worth waiting for.
-    /// </summary>
-    private readonly Dictionary<int, Point> _touchPoints = [];
-
-    private double _pinchStartDistance;
-
-    /// <summary>
     /// A pinch reports continuously, so without this one gesture would fire the command on every
-    /// update. Cleared when a finger lifts.
+    /// update. Cleared when the gesture ends.
     /// </summary>
     private bool _pinchActioned;
 
@@ -36,37 +28,32 @@ public partial class MainView : UserControl
         InitializeComponent();
         PageCarousel.SelectionChanged += OnCarouselSelectionChanged;
 
-        // Pinch handlers deliberately not wired: tunnelling pointer handlers here appeared to
-        // interfere with the drag-reorder gesture, and the pinch itself never fired on-device.
-        // Needs diagnosing on the tablet before being re-enabled.
+        // A gesture recogniser rather than the hand-rolled two-pointer tracking this replaced:
+        // that version listened on the same raw pointer events the pads' hold-drag uses, and the
+        // two gestures fought over them. A recogniser owns its pointers through Avalonia's own
+        // arbitration instead, so the drag gives way cleanly when a pinch takes over.
+        //
+        // See TwoFingerPinchRecognizer for why it isn't Avalonia's built-in PinchGestureRecognizer:
+        // that one cancels the Carousel's swipe on every single-finger touch.
+        var pinch = new TwoFingerPinchRecognizer();
+        pinch.Pinched += OnPinched;
+        pinch.PinchFinished += OnPinchFinished;
+        GestureRecognizers.Add(pinch);
     }
 
-    private void OnPinchPointerPressed(object? sender, PointerPressedEventArgs e)
+    /// <summary>
+    /// Zooms out to the overview once the fingers have closed far enough, and back into the page
+    /// once they've spread far enough. <paramref name="scale"/> is measured against the finger
+    /// distance at the start of the gesture, so it reads as a plain zoom factor.
+    /// </summary>
+    private void OnPinched(double scale)
     {
-        _touchPoints[e.Pointer.Id] = e.GetPosition(this);
-        if (_touchPoints.Count == 2)
-        {
-            _pinchStartDistance = CurrentTouchDistance();
-            _pinchActioned = false;
-        }
-    }
+        GestureLog.Write($"pinch scale={scale:F2} actioned={_pinchActioned}");
 
-    private void OnPinchPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (!_touchPoints.ContainsKey(e.Pointer.Id))
+        if (_pinchActioned || DataContext is not MainWindowViewModel viewModel)
         {
             return;
         }
-
-        _touchPoints[e.Pointer.Id] = e.GetPosition(this);
-
-        if (_touchPoints.Count != 2 || _pinchActioned || _pinchStartDistance <= 0
-            || DataContext is not MainWindowViewModel viewModel)
-        {
-            return;
-        }
-
-        var scale = CurrentTouchDistance() / _pinchStartDistance;
 
         if (!viewModel.IsPageOverviewOpen && scale <= PinchInThreshold)
         {
@@ -80,21 +67,10 @@ public partial class MainView : UserControl
         }
     }
 
-    private void OnPinchPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnPinchFinished()
     {
-        _touchPoints.Remove(e.Pointer.Id);
-        if (_touchPoints.Count < 2)
-        {
-            _pinchStartDistance = 0;
-            _pinchActioned = false;
-        }
-    }
-
-    private double CurrentTouchDistance()
-    {
-        var points = _touchPoints.Values.ToList();
-        return points.Count < 2 ? 0 : Math.Sqrt(
-            Math.Pow(points[1].X - points[0].X, 2) + Math.Pow(points[1].Y - points[0].Y, 2));
+        GestureLog.Write("pinch finished");
+        _pinchActioned = false;
     }
 
     /// <summary>
@@ -112,6 +88,9 @@ public partial class MainView : UserControl
         }
 
         var index = PageCarousel.SelectedIndex;
+        GestureLog.Write(
+            $"carousel selection {index} (vm {viewModel.SelectedCarouselIndex}) swipe={PageCarousel.IsSwipeEnabled}");
+
         if (!viewModel.IsSentinelIndex(index))
         {
             return;

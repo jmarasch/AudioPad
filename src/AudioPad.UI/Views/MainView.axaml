@@ -18,7 +18,9 @@
     <Panel>
         <!-- Pinch in to zoom out to the page overview, pinch out to come back — the gesture the
              zoomed-out/zoomed-in relationship already implies. Two-fingered, so it can't be
-             confused with the Carousel's one-finger swipe or a pad's hold-drag. -->
+             confused with the Carousel's one-finger swipe or a pad's hold-drag. The recogniser is
+             attached in the code-behind, on this view itself, so it sees both fingers wherever in
+             the page they land. -->
         <Button Content="&lt;" HorizontalAlignment="Left" VerticalAlignment="Center" Command="{Binding PreviousPageCommand}" ZIndex="1" />
         <Button Content="&gt;" HorizontalAlignment="Right" VerticalAlignment="Center" Command="{Binding NextPageCommand}" ZIndex="1" />
         <Button Content="Pages" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,40,0" Command="{Binding OpenPageOverviewCommand}" ZIndex="1" />

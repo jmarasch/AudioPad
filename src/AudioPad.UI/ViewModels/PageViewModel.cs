@@ -50,6 +50,20 @@ public sealed class PageViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Detaches every pad from the audio engine, for a page discarded wholesale — as happens when an
+    /// imported setup replaces the current one. The engine outlives the pages, so without this the
+    /// discarded view models stay alive and keep reacting to playback.
+    /// </summary>
+    public void Detach()
+    {
+        foreach (var pad in Pads)
+        {
+            pad.ConfigRequested -= _onPadConfigRequested;
+            pad.Detach();
+        }
+    }
+
+    /// <summary>
     /// Brings <see cref="Pads"/> back in line with <see cref="Page"/>'s pads after a resize. Pads
     /// that survived keep their existing view model, so one that's mid-playback keeps its lit
     /// state; the ones that didn't are detached so they stop listening to the audio engine.
@@ -86,16 +100,18 @@ public sealed class PageViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Moves a pad into another pad's slot, sliding everything between the two along to make room
-    /// — reordering a list, not swapping a pair. Dragging pad 1 onto pad 5 leaves 2-5 shifted back
-    /// by one rather than dumping pad 5 into the vacated slot, which is what "rearranging notes on
-    /// a page" does and what makes a run of related pads stay in order.
+    /// Moves a pad to a new index, sliding everything between along to make room — reordering a
+    /// list, not swapping a pair. Dragging pad 1 to pad 5's place leaves 2-5 shifted back by one
+    /// rather than dumping pad 5 into the vacated slot, which is what "rearranging notes on a page"
+    /// does and what makes a run of related pads stay in order.
+    ///
+    /// Called once per drag, when the finger lifts, so saving here costs one write per gesture.
     /// </summary>
-    public void MovePad(PadViewModel source, PadViewModel target)
+    public void MovePad(PadViewModel pad, int index)
     {
-        var from = Pads.IndexOf(source);
-        var to = Pads.IndexOf(target);
-        if (from < 0 || to < 0 || from == to)
+        var from = Pads.IndexOf(pad);
+        var to = Math.Clamp(index, 0, Pads.Count - 1);
+        if (from < 0 || from == to)
         {
             return;
         }
@@ -103,7 +119,7 @@ public sealed class PageViewModel : ViewModelBase
         Pads.Move(from, to);
 
         Page.Pads.RemoveAt(from);
-        Page.Pads.Insert(to, source.Config);
+        Page.Pads.Insert(to, pad.Config);
         ReassignGridPositions();
 
         _onChanged();

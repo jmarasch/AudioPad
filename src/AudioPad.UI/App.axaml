@@ -21,12 +21,15 @@
                     <SolidColorBrush x:Key="OverlayPanelBrush" Color="#FFFAFAFA" />
                     <SolidColorBrush x:Key="OverviewBackgroundBrush" Color="#FAFAFAFA" />
                     <SolidColorBrush x:Key="OverlayWarningBrush" Color="#E65100" />
+                    <!-- The line marking where a dragged pad or page will be dropped. -->
+                    <SolidColorBrush x:Key="DropIndicatorBrush" Color="#1565C0" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="OverlayScrimBrush" Color="#CC000000" />
                     <SolidColorBrush x:Key="OverlayPanelBrush" Color="#FF2B2B2B" />
                     <SolidColorBrush x:Key="OverviewBackgroundBrush" Color="#EE1E1E1E" />
                     <SolidColorBrush x:Key="OverlayWarningBrush" Color="#FFB74D" />
+                    <SolidColorBrush x:Key="DropIndicatorBrush" Color="#64B5F6" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
