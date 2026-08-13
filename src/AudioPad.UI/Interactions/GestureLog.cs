@@ -9,8 +9,12 @@ namespace AudioPad.UI.Interactions;
 /// </summary>
 internal static class GestureLog
 {
-    /// <summary>Flip to false to silence tracing once a gesture is settled.</summary>
-    public const bool Enabled = true;
+    /// <summary>
+    /// Flip to true to trace gestures while diagnosing one. Off in shipped builds. A readonly
+    /// field rather than a const so that switching it off doesn't make every call site
+    /// unreachable code, which the compiler rightly warns about.
+    /// </summary>
+    private static readonly bool Enabled = false;
 
     /// <summary>Writes one trace line, prefixed so it can be grepped out of a noisy logcat.</summary>
     public static void Write(string message)

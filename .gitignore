@@ -457,3 +457,7 @@ $RECYCLE.BIN/
 ## Claude Code local runtime state
 ##
 .claude/
+
+# Release packaging output (see package.sh)
+/dist/
+/build/

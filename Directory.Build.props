@@ -1,0 +1,11 @@
+<Project>
+    <!-- Product identity and version, shared by every project so a release is stamped in one place. -->
+    <PropertyGroup>
+        <Version>1.0.0</Version>
+        <Product>AudioPad</Product>
+        <Company>New Terra Studios</Company>
+        <Authors>New Terra Studios</Authors>
+        <Copyright>Copyright © 2026 New Terra Studios</Copyright>
+        <RepositoryUrl>https://github.com/jmarasch/AudioPad</RepositoryUrl>
+    </PropertyGroup>
+</Project>

@@ -5,6 +5,12 @@
     See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+
+    <!-- The self-contained builds are shipped to machines we know nothing about, and a .NET app
+         that isn't invariant needs the system's ICU libraries present to start at all. AudioPad
+         has nothing culture-sensitive to lose by going without: it formats times as m:ss, parses
+         colours and numbers with invariant rules already, and sorts nothing by locale. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <PropertyGroup>

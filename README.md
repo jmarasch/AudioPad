@@ -1,76 +1,83 @@
 # AudioPad
 
-A cross-platform soundboard: a user-configurable grid of buttons, each mapped to an audio clip.
+A cross-platform soundboard: a grid of buttons, each mapped to an audio clip, built for firing
+sound cues live — at a table, on stage, or wherever a clip needs to land on time.
 
-- **Latch** mode: press to play through once; press again while playing to interrupt/stop.
-- **Loop** mode: press to loop continuously until pressed again.
-- Multiple pads can play at once, each with its own volume.
-- A pad shows lit while its clip is playing; double-tap a pad to configure its file, mode,
-  volume, icon, and label.
-- Grid size (rows/columns) is user-configurable.
-- Targets Linux, Windows, and Android (15+) from one shared codebase.
+Runs on **Windows**, **Linux**, and **Android** from one shared codebase.
 
-This repository is currently a **project scaffold**: the domain model, project structure, and a
-placeholder UI are in place and building; the real audio engine and per-pad config dialog are the
-next milestones — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full breakdown and
-what's next.
+## What it does
 
-## Stack
+- **Latch** pads play once; press again to cut them off. **Loop** pads play until stopped.
+- Many pads can play at once, each at its own volume.
+- A playing pad lights up and shows **restart / stop / pause** as large targets, with elapsed time
+  for loops and a countdown for one-shots.
+- **Pages** hold separate grids, navigated as an endless carousel — swipe, use the arrows, or
+  pinch to zoom out to the page manager.
+- Grid size is per page, from 1×1 to 8×8.
+- Pads take four colours — idle and playing, each with its own hover shade — set per page and
+  overridable per pad.
+- **Edit mode** separates arranging from performing: with it on, a tap opens a pad's settings and
+  a drag rearranges the board; with it off, taps only play. Nothing can be reconfigured by
+  accident mid-performance.
+- Clips and icons are **imported into the app's own library**, so a board doesn't break when you
+  reorganise your folders, and behaves the same on every platform.
+- **Export and import** a page or a whole setup as a single `.audiopad` file, media included —
+  build a board on the desktop and carry it to the tablet.
 
-- **C# / .NET 10** — the current LTS.
-- **[Avalonia UI](https://avaloniaui.net/)** (MIT) — cross-platform XAML/MVVM UI framework;
-  unlike .NET MAUI, it targets Linux desktop as a first-class platform alongside Windows and
-  Android.
-- **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** (MIT, Microsoft) —
-  `ObservableObject`/`RelayCommand` source generators, to keep ViewModels boilerplate-free.
-- **[LibVLCSharp](https://code.videolan.org/videolan/LibVLCSharp)** (LGPL-2.1, VideoLAN — the VLC
-  team) — the audio engine (planned; not yet implemented). Chosen because it can run many
-  independent, concurrently-playing clips with per-clip volume, cross-platform, which plain
-  platform media APIs don't do uniformly across Windows/Linux/Android.
+## Install
 
-See the plan's library vetting notes for adoption/maintenance signals checked before adopting
-each of these.
+Grab the latest build from [Releases](https://github.com/jmarasch/AudioPad/releases).
 
-## Prerequisites
+### Windows
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Avalonia templates: `dotnet new install Avalonia.Templates`
-- For Android builds: `dotnet workload install android`, a JDK (11+), and the Android SDK
-  (`dotnet build -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
-  -p:AndroidSdkPath=<path> -p:JavaSdkDirectory=<path>` will provision it)
-- **Linux only, at runtime:** once the audio engine lands, playing clips will require libVLC to
-  be installed system-wide (`sudo apt install libvlc5` or a full VLC install) — unlike Windows
-  and Android, there's no NuGet package bundling libVLC's native binaries for Linux.
+Download `AudioPad-windows-x64.zip`, unzip it anywhere, run `AudioPad.exe`. Nothing to install —
+the .NET runtime and libVLC are included.
 
-## Building & running
+Windows SmartScreen will warn about an unrecognised publisher, since the build isn't
+code-signed. Choose *More info* → *Run anyway*.
 
-```bash
-# Whole solution
-dotnet build AudioPad.slnx
+### Linux (Debian / Ubuntu)
 
-# Run the desktop app (Windows/Linux)
-dotnet run --project src/AudioPad.Desktop
-
-# Unit tests (Core domain logic — no UI/audio dependencies)
-dotnet test tests/AudioPad.Core.Tests
-
-# Android (after the Android SDK/workload prerequisites above)
-dotnet build src/AudioPad.Android -f net10.0-android
+```sh
+sudo apt install ./audiopad_1.0.0_amd64.deb
 ```
 
-## Packaging for testing on another machine
+The package depends on your distribution's `libvlc5`, which apt will pull in. The .NET runtime is
+bundled, so nothing else is needed. AudioPad then appears in your application menu.
 
-```bash
-./package.sh
+### Android (sideload)
+
+Download `AudioPad-1.0.0.apk` and open it on the device. You'll need to allow installation from
+unknown sources when prompted. Requires **Android 15 (API 35)** or newer.
+
+## Building from source
+
+```sh
+dotnet build                        # everything
+dotnet run --project src/AudioPad.Desktop   # run the desktop app
+dotnet test                         # unit tests
+./package.sh                        # distributable packages for all three platforms
 ```
 
-Publishes a self-contained Desktop build for Linux and Windows plus a signed, installable Android
-APK into `bin/Linux/`, `bin/Windows/`, and `bin/Android/` respectively — each one is everything
-needed to copy/zip that folder (or `.apk`) and hand it to someone to run, without them needing the
-.NET SDK installed. Linux still needs libVLC installed system-wide on the target machine (see
-above); Windows and Android bundle libVLC's native binaries.
+**Prerequisites:** the [.NET 10 SDK](https://dotnet.microsoft.com/download). Android builds also
+need the `android` workload, a JDK 21, and the Android SDK. Running the desktop app from source on
+Linux needs libVLC present (`sudo apt install libvlc5`); the packaged builds handle this
+themselves.
 
-## Project layout
+## How it's put together
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full directory breakdown, the reasoning
-behind the module split, and coding conventions used throughout the codebase.
+`Core` holds the domain model and persistence with no UI or platform dependencies. `Audio`
+isolates libVLC behind an interface. `UI` is one shared Avalonia project, and `Desktop` and
+`Android` are thin heads that wire up the platform entry point.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers the structure and the reasoning behind the
+decisions that aren't obvious from the code — particularly around gesture handling and audio,
+where the intuitive approach turned out to be wrong.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+AudioPad links against **libVLC** and **LibVLCSharp** (LGPL-2.1-or-later, © VideoLAN), used
+unmodified as dynamically linked libraries. Full attribution for every bundled component is in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
