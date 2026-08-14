@@ -30,8 +30,11 @@ Grab the latest build from [Releases](https://github.com/jmarasch/AudioPad/relea
 
 ### Windows
 
-Download `AudioPad-windows-x64.zip`, unzip it anywhere, run `AudioPad.exe`. Nothing to install —
-the .NET runtime and libVLC are included.
+Download `AudioPad-1.0.0-windows-x64.zip`, unzip it anywhere, run `AudioPad.exe`.
+
+Needs the [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). If it isn't
+installed, Windows says so and links to the download when you first run the app. libVLC is
+included in the package.
 
 Windows SmartScreen will warn about an unrecognised publisher, since the build isn't
 code-signed. Choose *More info* → *Run anyway*.
@@ -43,7 +46,8 @@ sudo apt install ./audiopad_1.0.0_amd64.deb
 ```
 
 The package depends on your distribution's `libvlc5`, which apt will pull in. The .NET runtime is
-bundled, so nothing else is needed. AudioPad then appears in your application menu.
+bundled — .NET 10 isn't in the Debian or Ubuntu archives, so requiring it would mean adding
+Microsoft's package feed first. AudioPad then appears in your application menu.
 
 ### Android (sideload)
 

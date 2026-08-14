@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Builds the distributable packages for a release into dist/:
 #
-#   AudioPad-<version>-windows-x64.zip   self-contained; unzip and run
+#   AudioPad-<version>-windows-x64.zip   needs the .NET 10 desktop runtime installed
 #   audiopad_<version>_amd64.deb         self-contained; apt pulls in libvlc5
 #   AudioPad-<version>.apk               release-signed, sideloadable
-#
-# Desktop packages are self-contained — they carry the .NET runtime — because the people
-# downloading a soundboard shouldn't have to install a SDK first. That costs size, which is the
-# right trade for a double-click-and-go download.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -23,8 +19,17 @@ KEYSTORE_PASSWORD_FILE="${AUDIOPAD_KEYSTORE_PASSWORD_FILE:-$HOME/.androidkeys/au
 rm -rf dist build
 mkdir -p dist
 
-echo "==> Windows (self-contained x64)"
-dotnet publish src/AudioPad.Desktop -c Release -r win-x64 --self-contained true \
+# SkiaSharp and HarfBuzz ship native debug symbols in their NuGet packages, and publish copies them
+# into the output — 100 MB of .pdb in a release build, more than the .NET runtime itself. They are
+# only useful for debugging those libraries' own native code.
+strip_debug_symbols() {
+    find "$1" -name '*.pdb' -delete
+}
+
+echo "==> Windows (framework-dependent x64)"
+# Not self-contained: Windows users can install the .NET runtime, and the generated apphost tells
+# them where to get it if it's missing. That keeps ~72 MB of runtime out of the download.
+dotnet publish src/AudioPad.Desktop -c Release -r win-x64 --self-contained false \
     -p:Version="$VERSION" -o build/windows >/dev/null
 
 # VideoLAN.LibVLC.Windows ships every Windows architecture and the build copies all of them, so a
@@ -32,12 +37,17 @@ dotnet publish src/AudioPad.Desktop -c Release -r win-x64 --self-contained true 
 # more than twice the size of the rest of the package. Drop them.
 find build/windows/libvlc -mindepth 1 -maxdepth 1 -type d ! -name win-x64 -exec rm -rf {} +
 
+strip_debug_symbols build/windows
+
 cp LICENSE THIRD-PARTY-NOTICES.md build/windows/
 (cd build/windows && zip -qr "../../dist/AudioPad-$VERSION-windows-x64.zip" .)
 
 echo "==> Linux (.deb, self-contained amd64)"
+# Self-contained deliberately: .NET 10 is not in the Debian or Ubuntu archives, so a
+# framework-dependent package would make people add Microsoft's feed before it would install.
 dotnet publish src/AudioPad.Desktop -c Release -r linux-x64 --self-contained true \
     -p:Version="$VERSION" -o build/linux >/dev/null
+strip_debug_symbols build/linux
 
 DEB=build/deb
 install -d "$DEB/DEBIAN" "$DEB/opt/audiopad" "$DEB/usr/bin" \

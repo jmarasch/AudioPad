@@ -4,7 +4,7 @@
 
 | File | Platform | Notes |
 | --- | --- | --- |
-| `AudioPad-<version>-windows-x64.zip` | Windows | Self-contained; unzip and run |
+| `AudioPad-<version>-windows-x64.zip` | Windows | Needs the .NET 10 Runtime installed |
 | `audiopad_<version>_amd64.deb` | Debian/Ubuntu | Self-contained; apt pulls in `libvlc5` |
 | `AudioPad-<version>.apk` | Android | Release-signed, sideloadable |
 
@@ -37,16 +37,24 @@ keytool -genkeypair -keystore audiopad-release.keystore -alias audiopad \
         -dname "CN=New Terra Studios, O=New Terra Studios, C=CA"
 ```
 
-## Desktop builds are self-contained
+## What each desktop package carries
 
-Both desktop packages carry the .NET runtime, so neither needs anything installed first. That is
-why they are large — roughly 117 MB zipped for Windows.
+**Windows is framework-dependent.** The .NET runtime is roughly 72 MB uncompressed and Windows
+users can install it themselves; the generated apphost tells them where to get it if it's missing.
 
-Two details worth knowing before changing this:
+**Linux is self-contained.** .NET 10 is not in the Debian or Ubuntu archives, so a
+framework-dependent `.deb` would require adding Microsoft's package feed before it would install —
+a worse first run than a larger download.
+
+**Neither ships debug symbols.** SkiaSharp and HarfBuzz include native `.pdb` files in their NuGet
+packages and publish copies them into the output: 100 MB of symbols nobody will use. `package.sh`
+deletes them.
+
+Two more details worth knowing before changing this:
 
 - `VideoLAN.LibVLC.Windows` ships every Windows architecture and the build copies all of them, so
   a win-x64 publish arrives carrying arm64 and x86 copies of libVLC it can never load. `package.sh`
-  deletes them; without that step the zip is 199 MB instead of 117 MB.
+  deletes them; without that step the zip is far larger.
 - Linux does **not** bundle libVLC. There is no NuGet package carrying its Linux natives, so the
   `.deb` depends on the distribution's `libvlc5` instead.
 
